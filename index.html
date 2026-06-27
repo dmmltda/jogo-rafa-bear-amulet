@@ -1161,7 +1161,7 @@ function phaseCity(){
   const WW=2400, WH=2000; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
   let t=0, lastPlace=null, inside=null, cityX=0, cityY=0;
   const places=[
-    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Você descansou em casa 😴', coin:2, wall:'#f3e4c4', floor:'#caa46e', props:['🛋️','📺','🪴','🖼️']},
+    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Bem-vindo em casa! 🏠', coin:2, home:true, wall:'#f3e4c4', floor:'#caa46e'},
     {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5, wall:'#d8ecd8', floor:'#b89a6a', props:['📚','✏️','🍎','🧑‍🏫','🌍']},
     {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4, wall:'#ffe3ef', floor:'#e8c9a0', props:['🍦','🍨','🍧','🧁']},
     {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Bem-vindo ao mercado! 🛒', coin:3, shop:true, wall:'#eef3ff', floor:'#c8b48a'},
@@ -1192,10 +1192,15 @@ function phaseCity(){
     const perRow=5, rows=3, y0=200, dy=118;
     for(let r=0;r<rows;r++) for(let c=0;c<perRow;c++)
       shelf.push({ e:FOODS[(r*perRow+c)%FOODS.length], x:W*(c+1)/(perRow+1), y:y0+r*dy, pop:0 }); }
+  // ---- house furniture (Casa): bed, sofa, TV ----
+  const HOME={ bed:{x:W*0.70,y:250,w:162,h:92}, sofa:{x:W*0.32,y:H*0.66,w:152,h:72}, tv:{x:W*0.32,y:H*0.66-150} };
+  let homeAct='none';   // 'none' | 'bed' | 'sofa'
+  function inRect(x,y,r){ return Math.abs(x-r.x)<r.w/2 && Math.abs(y-r.y)<r.h/2; }
   function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<78) return p; } return null; }
   function enter(p){ inside=p; cityX=A.x; cityY=A.y; A.vx=A.vy=0; A.hopY=0; A.onGround=true;
     if(p.soccer){ A.x=W*0.3; A.y=H*0.5; initSoccer(); }
     else if(p.shop){ A.x=W/2; A.y=H-150; initMarket(); }
+    else if(p.home){ A.x=W/2; A.y=H-150; homeAct='none'; }
     else { A.x=W/2; A.y=170; }
     addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
   function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
@@ -1208,6 +1213,10 @@ function phaseCity(){
     tap(x,y){ if(!inside) return;
       if(inside.shop){ for(const it of shelf){ if(Math.hypot(x-it.x,y-it.y)<30){
         cart++; it.pop=1; floaters.push({x:it.x,y:it.y-6,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
+      if(inside.home){
+        if(inRect(x,y,HOME.bed)){ homeAct='bed'; A.x=HOME.bed.x+8; A.y=HOME.bed.y; A.vx=A.vy=0; toast('Zzz... dormindo 😴'); Sound.sfx('blip'); return; }
+        if(inRect(x,y,HOME.sofa)){ homeAct='sofa'; A.x=HOME.sofa.x; A.y=HOME.sofa.y-12; A.vx=A.vy=0; toast('Vendo TV 📺'); Sound.sfx('blip'); return; }
+      }
       if(!inside.soccer && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
       if(inside && inside.soccer){            // ===== PARK SOCCER =====
@@ -1227,9 +1236,13 @@ function phaseCity(){
           else { ball.x=W-26; ball.vx*=-0.7; } }
         return;
       }
-      if(inside){                              // ===== generic interior / market =====
+      if(inside){                              // ===== generic interior / market / house =====
         if(jumpQueued){ jumpQueued=false; leave(); return; }
-        const ax=readAxis(); A.vx+=ax.x*0.9; A.vy+=ax.y*0.9;
+        const ax=readAxis();
+        if(inside.home && homeAct!=='none'){     // resting on bed/sofa: move to get up
+          if(ax.x||ax.y) homeAct='none'; else return;
+        }
+        A.vx+=ax.x*0.9; A.vy+=ax.y*0.9;
         moveActor(A,0,0.8,5,48,W-48,150,H-70);
         for(let i=floaters.length-1;i>=0;i--){ const f=floaters[i]; f.y-=1.4; f.life-=0.02; if(f.life<=0) floaters.splice(i,1); }
         shelf.forEach(s=> s.pop=Math.max(0,s.pop-0.08));
@@ -1246,6 +1259,7 @@ function phaseCity(){
     draw(){
       if(inside && inside.soccer){ drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB); return; }
       if(inside && inside.shop){ drawMarket(inside, A, DOOR, shelf, cart, floaters); return; }
+      if(inside && inside.home){ drawHouse(inside, A, DOOR, HOME, homeAct, t); return; }
       if(inside){ drawCityInterior(inside, A, DOOR); return; }
       const ox=-cam.x, oy=-cam.y;
       ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
@@ -1334,6 +1348,60 @@ function drawMarket(p,A,DOOR,shelf,cart,floaters){
   vignette(0.30);
   banner('🛒 Carrinho: '+cart+' '+(cart===1?'item':'itens'));
   hint('Toque na comida para comprar 🛒 · porta 🚪 ou ⤴ sai');
+}
+// house interior with a bed (sleep), sofa (sit) and a TV in front of the sofa
+function drawHouse(p,A,DOOR,HOME,act,t){
+  ctx.fillStyle=p.wall||'#f3e4c4'; ctx.fillRect(0,0,W,H);                 // wall
+  ctx.fillStyle=p.floor||'#caa46e'; ctx.fillRect(0,H*0.58,W,H*0.42);     // floor
+  ctx.fillStyle='rgba(0,0,0,.06)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.58,2,H*0.42);
+  ctx.fillStyle='rgba(0,0,0,.05)'; ctx.fillRect(0,H*0.58,W,4);
+  // window on the wall
+  ctx.fillStyle='#bfe3ff'; rrect(W*0.12,70,90,64,8); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(W*0.12+45,70); ctx.lineTo(W*0.12+45,134); ctx.moveTo(W*0.12,102); ctx.lineTo(W*0.12+90,102); ctx.stroke();
+  ctx.strokeStyle='#9a6a3a'; ctx.lineWidth=4; ctx.strokeRect(W*0.12,70,90,64);
+  // --- bed ---
+  const b=HOME.bed;
+  ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(b.x,b.y+b.h/2,b.w*0.5,8,0,0,7); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(b.x-b.w/2,b.y-b.h/2,b.w,b.h,10); ctx.fill();
+  ctx.fillStyle='#e7eefc'; rrect(b.x-b.w/2+6,b.y-b.h/2+6,b.w-12,b.h-12,8); ctx.fill();   // mattress
+  ctx.fillStyle='#9ab8e8'; rrect(b.x-b.w*0.18,b.y-b.h/2+8,b.w*0.62,b.h-16,8); ctx.fill(); // blanket
+  ctx.fillStyle='#fff'; rrect(b.x-b.w/2+10,b.y-b.h/2+10,b.w*0.28,b.h*0.5,6); ctx.fill();  // pillow
+  // --- TV (in front of the sofa) ---
+  const tv=HOME.tv, on=(act==='sofa');
+  ctx.fillStyle='#5a3a24'; rrect(tv.x-44,tv.y+26,88,10,4); ctx.fill();   // stand
+  ctx.fillStyle='#23262e'; rrect(tv.x-52,tv.y-34,104,66,8); ctx.fill();  // frame
+  if(on){ const cols=['#ff6b6b','#7bd88f','#5b8cff','#ffd34d'];
+    for(let i=0;i<4;i++){ ctx.fillStyle=cols[(i+Math.floor(t/14))%4]; ctx.fillRect(tv.x-44+i*22,tv.y-27,22,52); }
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(tv.x+Math.sin(t*0.12)*30, tv.y, 6,0,7); ctx.fill();
+    ctx.save(); ctx.globalAlpha=0.25; softSun(tv.x,tv.y,90,'rgba(180,210,255,1)'); ctx.restore();
+  } else { ctx.fillStyle='#39424f'; rrect(tv.x-44,tv.y-27,88,52,4); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.moveTo(tv.x-44,tv.y-27); ctx.lineTo(tv.x-10,tv.y-27); ctx.lineTo(tv.x-30,tv.y+25); ctx.lineTo(tv.x-44,tv.y+25); ctx.fill(); }
+  // --- sofa (faces up toward the TV) ---
+  const s=HOME.sofa;
+  ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(s.x,s.y+s.h/2,s.w*0.5,8,0,0,7); ctx.fill();
+  ctx.fillStyle='#9a4e4e'; rrect(s.x-s.w/2,s.y-s.h/2,s.w,22,10); ctx.fill();              // backrest
+  ctx.fillStyle='#c96b6b'; rrect(s.x-s.w/2,s.y-s.h/2+16,s.w,s.h-16,10); ctx.fill();       // seat
+  ctx.fillStyle='#b85c5c'; rrect(s.x-s.w/2-2,s.y-s.h/2+10,18,s.h-6,8); ctx.fill();        // arms
+  ctx.fillStyle='#b85c5c'; rrect(s.x+s.w/2-16,s.y-s.h/2+10,18,s.h-6,8); ctx.fill();
+  ctx.fillStyle='#d67e7e'; rrect(s.x-s.w/2+20,s.y-2,s.w*0.32,20,6); ctx.fill(); rrect(s.x+4,s.y-2,s.w*0.32,20,6); ctx.fill();
+  // --- hero in the right pose ---
+  if(act==='bed'){
+    ctx.save(); ctx.translate(b.x+6,b.y-2); ctx.rotate(-Math.PI/2); drawChar(CHARS[charSel],0,0,0.82,1,0,null); ctx.restore();
+    emoji('💤', b.x+44, b.y-26 + Math.sin(t*0.08)*2, 22);
+  } else if(act==='sofa'){
+    drawChar(CHARS[charSel], s.x, s.y-16, 0.9, 1, 0, null);
+    emoji('📺', s.x+44, s.y-30, 18);
+  } else {
+    drawRoamer(A,0,0);
+  }
+  // door
+  ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-34,DOOR.y-60,68,118,8); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(DOOR.x-28,DOOR.y-54,56,106,6); ctx.fill();
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(DOOR.x+16,DOOR.y,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('SAIR 🚪',DOOR.x,DOOR.y+70);
+  vignette(0.30);
+  banner('🏠 Sua Casa');
+  hint('Toque na cama 😴 ou no sofá 📺 · ande para levantar · 🚪/⤴ sai');
 }
 // interior mini-scene of a city place
 function drawCityInterior(p, A, DOOR){
