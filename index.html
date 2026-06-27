@@ -351,11 +351,11 @@ const OUTFITS=[
 ];
 const OUTFIT_PRICE=[0,40,30,15,15,35,20,20,10,25,50];  // cost in coins (0 = free)
 let outfitSel=0;
-// ----- coins + owned outfits (persisted) -----
-let coins=0, owned=[0];
-try{ coins=+(localStorage.getItem('amuletoCoins')||0)||0; owned=JSON.parse(localStorage.getItem('amuletoOwned')||'[0]'); }catch(e){}
-if(!Array.isArray(owned)||!owned.includes(0)) owned=[0];
-function saveProgress(){ try{ localStorage.setItem('amuletoCoins',coins); localStorage.setItem('amuletoOwned',JSON.stringify(owned)); }catch(e){} }
+// ----- coins (just a collectible) + outfits: everything is FREE / unlocked -----
+let coins=0;
+try{ coins=+(localStorage.getItem('amuletoCoins')||0)||0; }catch(e){}
+const owned = OUTFITS.map((_,i)=>i);   // all clothes free to use, no buying needed
+function saveProgress(){ try{ localStorage.setItem('amuletoCoins',coins); }catch(e){} }
 function updateCoinUI(){ document.querySelectorAll('.coinVal').forEach(e=> e.textContent=coins); }
 function addCoins(n){ coins=Math.max(0,coins+n); saveProgress(); updateCoinUI(); }
 let pieces = 0;      // amulet pieces collected
@@ -1164,7 +1164,7 @@ function phaseCity(){
     {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Você descansou em casa 😴', coin:2},
     {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5},
     {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4},
-    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Toque em 👕 para a loja de roupas! 🛍️', coin:3, shop:true},
+    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Fez comprinhas no mercado! 🛒', coin:3},
     {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Brincou no parque! 🎉', coin:4},
     {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3},
     {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Que aventura na roda-gigante! 🎡', coin:6},
