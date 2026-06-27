@@ -1162,7 +1162,7 @@ function phaseCity(){
   let t=0, lastPlace=null, inside=null, cityX=0, cityY=0;
   const places=[
     {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Bem-vindo em casa! 🏠', coin:2, home:true, wall:'#f3e4c4', floor:'#caa46e'},
-    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5, wall:'#d8ecd8', floor:'#b89a6a', props:['📚','✏️','🍎','🧑‍🏫','🌍']},
+    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Hora da aula! 📚', coin:5, school:true, wall:'#e0efe0', floor:'#b89a6a'},
     {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4, wall:'#ffe3ef', floor:'#e8c9a0', props:['🍦','🍨','🍧','🧁']},
     {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Bem-vindo ao mercado! 🛒', coin:3, shop:true, wall:'#eef3ff', floor:'#c8b48a'},
     {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true},
@@ -1194,13 +1194,21 @@ function phaseCity(){
       shelf.push({ e:FOODS[(r*perRow+c)%FOODS.length], x:W*(c+1)/(perRow+1), y:y0+r*dy, pop:0 }); }
   // ---- house furniture (Casa): bed, sofa, TV ----
   const HOME={ bed:{x:W*0.70,y:250,w:162,h:92}, sofa:{x:W*0.32,y:H*0.66,w:152,h:72}, tv:{x:W*0.32,y:H*0.66-150} };
-  let homeAct='none';   // 'none' | 'bed' | 'sofa'
+  let homeAct='none';   // 'none' | 'bed' | 'sofa' | 'sit'
   function inRect(x,y,r){ return Math.abs(x-r.x)<r.w/2 && Math.abs(y-r.y)<r.h/2; }
+  // ---- school (Escola): 5 desks with students, a board and a teacher ----
+  const SCHOOL={ board:{x:W/2,y:120,w:300,h:92}, teacher:{x:W*0.20,y:214} };
+  let desks=[], studied=false;
+  function initSchool(){ homeAct='none'; studied=false; desks=[];
+    const r1=H*0.50, r2=H*0.70;
+    const pos=[[W*0.25,r1],[W*0.5,r1],[W*0.75,r1],[W*0.36,r2],[W*0.64,r2]];
+    pos.forEach((p,i)=> desks.push({x:p[0], y:p[1], npc: i===1 ? -1 : (charSel+i+2)%CHARS.length })); }
   function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<78) return p; } return null; }
   function enter(p){ inside=p; cityX=A.x; cityY=A.y; A.vx=A.vy=0; A.hopY=0; A.onGround=true;
     if(p.soccer){ A.x=W*0.3; A.y=H*0.5; initSoccer(); }
     else if(p.shop){ A.x=W/2; A.y=H-150; initMarket(); }
     else if(p.home){ A.x=W/2; A.y=H-150; homeAct='none'; }
+    else if(p.school){ A.x=W/2; A.y=H-150; initSchool(); }
     else { A.x=W/2; A.y=170; }
     addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
   function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
@@ -1216,6 +1224,11 @@ function phaseCity(){
       if(inside.home){
         if(inRect(x,y,HOME.bed)){ homeAct='bed'; A.x=HOME.bed.x+8; A.y=HOME.bed.y; A.vx=A.vy=0; toast('Zzz... dormindo 😴'); Sound.sfx('blip'); return; }
         if(inRect(x,y,HOME.sofa)){ homeAct='sofa'; A.x=HOME.sofa.x; A.y=HOME.sofa.y-12; A.vx=A.vy=0; toast('Vendo TV 📺'); Sound.sfx('blip'); return; }
+      }
+      if(inside.school){
+        for(const d of desks){ if(d.npc===-1 && inRect(x,y,{x:d.x,y:d.y,w:96,h:84})){ homeAct='sit'; A.x=d.x; A.y=d.y-8; A.vx=A.vy=0;
+          if(!studied){ studied=true; addCoins(3); } toast('Estudando! 📚'); Sound.sfx('blip'); return; } }
+        if(inRect(x,y,{x:SCHOOL.board.x,y:SCHOOL.board.y,w:SCHOOL.board.w,h:SCHOOL.board.h})){ toast('A professora ensinou algo novo! 🍎'); Sound.sfx('blip'); return; }
       }
       if(!inside.soccer && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
@@ -1239,7 +1252,7 @@ function phaseCity(){
       if(inside){                              // ===== generic interior / market / house =====
         if(jumpQueued){ jumpQueued=false; leave(); return; }
         const ax=readAxis();
-        if(inside.home && homeAct!=='none'){     // resting on bed/sofa: move to get up
+        if((inside.home||inside.school) && homeAct!=='none'){   // seated/lying: move to get up
           if(ax.x||ax.y) homeAct='none'; else return;
         }
         A.vx+=ax.x*0.9; A.vy+=ax.y*0.9;
@@ -1260,6 +1273,7 @@ function phaseCity(){
       if(inside && inside.soccer){ drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB); return; }
       if(inside && inside.shop){ drawMarket(inside, A, DOOR, shelf, cart, floaters); return; }
       if(inside && inside.home){ drawHouse(inside, A, DOOR, HOME, homeAct, t); return; }
+      if(inside && inside.school){ drawSchool(inside, A, DOOR, SCHOOL, desks, homeAct, t); return; }
       if(inside){ drawCityInterior(inside, A, DOOR); return; }
       const ox=-cam.x, oy=-cam.y;
       ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
@@ -1402,6 +1416,60 @@ function drawHouse(p,A,DOOR,HOME,act,t){
   vignette(0.30);
   banner('🏠 Sua Casa');
   hint('Toque na cama 😴 ou no sofá 📺 · ande para levantar · 🚪/⤴ sai');
+}
+// classroom: big board, teacher, and 5 desks with student characters
+function drawDesk(d){
+  // chair behind the desk
+  ctx.fillStyle='#8a5a32'; rrect(d.x-15,d.y-34,30,16,4); ctx.fill();
+  ctx.fillStyle='#6e4724'; rrect(d.x-15,d.y-40,30,8,3); ctx.fill();
+  // table
+  ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(d.x,d.y+20,40,7,0,0,7); ctx.fill();
+  ctx.fillStyle='#cda46a'; rrect(d.x-40,d.y,80,18,5); ctx.fill();
+  ctx.fillStyle='#b3884f'; ctx.fillRect(d.x-36,d.y+16,8,18); ctx.fillRect(d.x+28,d.y+16,8,18);
+  // notebook + pencil on the table
+  ctx.fillStyle='#f4f1e6'; rrect(d.x-14,d.y+2,24,12,2); ctx.fill();
+  ctx.strokeStyle='#9ab'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(d.x-10,d.y+6); ctx.lineTo(d.x+6,d.y+6); ctx.moveTo(d.x-10,d.y+9); ctx.lineTo(d.x+6,d.y+9); ctx.stroke();
+  ctx.strokeStyle='#ffd34d'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(d.x+8,d.y+2); ctx.lineTo(d.x+15,d.y+12); ctx.stroke();
+}
+function drawSchool(p,A,DOOR,SCHOOL,desks,act,t){
+  ctx.fillStyle=p.wall||'#e0efe0'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=p.floor||'#b89a6a'; ctx.fillRect(0,H*0.58,W,H*0.42);
+  ctx.fillStyle='rgba(0,0,0,.06)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.58,2,H*0.42);
+  // --- big blackboard ---
+  const b=SCHOOL.board;
+  ctx.fillStyle='#6e4a2c'; rrect(b.x-b.w/2-7,b.y-b.h/2-7,b.w+14,b.h+14,8); ctx.fill();
+  ctx.fillStyle='#2f4a3a'; rrect(b.x-b.w/2,b.y-b.h/2,b.w,b.h,4); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='bold 22px Trebuchet MS'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('A  B  C', b.x-b.w/2+20, b.y-16);
+  ctx.fillText('1 + 1 = 2', b.x-b.w/2+20, b.y+16);
+  ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2;   // little sun drawing
+  ctx.beginPath(); ctx.arc(b.x+b.w/2-46,b.y,16,0,7); ctx.stroke();
+  for(let i=0;i<8;i++){ const a=i*Math.PI/4; ctx.beginPath(); ctx.moveTo(b.x+b.w/2-46+Math.cos(a)*19,b.y+Math.sin(a)*19); ctx.lineTo(b.x+b.w/2-46+Math.cos(a)*24,b.y+Math.sin(a)*24); ctx.stroke(); }
+  // chalk ledge
+  ctx.fillStyle='#6e4a2c'; rrect(b.x-b.w/2-7,b.y+b.h/2+5,b.w+14,7,3); ctx.fill();
+  // --- teacher beside the board ---
+  const tx=SCHOOL.teacher.x, ty=SCHOOL.teacher.y;
+  drawChar(CHARS[3], tx, ty, 1.05, 1, Math.sin(t*0.05)*2, null);  // teacher (raposa)
+  ctx.strokeStyle='#7a5230'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(tx+18,ty-6); ctx.lineTo(tx+44,b.y+b.h/2); ctx.stroke(); // pointer to board
+  ctx.fillStyle='#9a6a3a'; rrect(tx-26,ty+22,54,20,5); ctx.fill();   // teacher's desk
+  emoji('🍎', tx-2, ty+18, 18);
+  // --- desks (+ students) and the hero, depth-sorted ---
+  const list = desks.map(d=>({y:d.y,k:'desk',o:d}));
+  if(!(act==='sit')) list.push({y:A.y,k:'me'});
+  list.sort((a,b)=>a.y-b.y);
+  for(const it of list){
+    if(it.k==='desk'){ drawDesk(it.o); if(it.o.npc>=0) drawChar(CHARS[it.o.npc], it.o.x, it.o.y-24, 0.8, 1, 0, null); }
+    else drawRoamer(A,0,0);
+  }
+  if(act==='sit') drawChar(CHARS[charSel], A.x, A.y-16, 0.8, 1, 0, null);  // hero seated at its desk
+  // door
+  ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-34,DOOR.y-60,68,118,8); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(DOOR.x-28,DOOR.y-54,56,106,6); ctx.fill();
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(DOOR.x+16,DOOR.y,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('SAIR 🚪',DOOR.x,DOOR.y+70);
+  vignette(0.30);
+  banner('🏫 Escola');
+  hint('Toque na sua mesa para estudar 📚 · 🚪/⤴ sai');
 }
 // interior mini-scene of a city place
 function drawCityInterior(p, A, DOOR){
