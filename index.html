@@ -1168,7 +1168,7 @@ function phaseCity(){
     {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true},
     {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3, wall:'#eef6ff', floor:'#cfd6dc', props:['🩺','💊','🛏️','➕']},
     {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Bora se divertir! 🎡', coin:6, funpark:true, wall:'#bfe3ff', floor:'#9ccf7a'},
-    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hmm, um lanche! 🍔', coin:4, wall:'#fff0c2', floor:'#caa46e', props:['🍔','🍟','🥤','🌭','🍕']},
+    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hora do lanche! 🍔', coin:4, diner:true, wall:'#fff0c2', floor:'#caa46e'},
   ];
   const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
   for(let i=0;i<44;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
@@ -1198,6 +1198,13 @@ function phaseCity(){
     {name:'Baunilha',color:'#f1e0a8'},{name:'Menta',color:'#8fe0b0'},{name:'Uva',color:'#b98bff'}];
   function initIce(){ cart=0; floaters=[]; flavors=[]; iceClerk=(charSel+2)%CHARS.length;
     const n=FLAVORS.length; for(let i=0;i<n;i++) flavors.push({ ...FLAVORS[i], x:W*(i+1)/(n+1), y:336, pop:0 }); }
+  // ---- diner state (Lanchonete): side register + tables with customers ----
+  let menu=[], seats=[], dinerClerk=0;
+  function initDiner(){ cart=0; floaters=[]; menu=[]; seats=[]; dinerClerk=(charSel+3)%CHARS.length;
+    const items=[['🍔','Hambúrguer'],['🍔','Hambúrguer'],['🍟','Batata frita'],['🥤','Refrigerante']];
+    items.forEach((it,i)=> menu.push({ e:it[0], name:it[1], x:88, y:212+i*54, pop:0 }));
+    const tpos=[[300,300],[440,300],[270,470],[420,470],[350,620]];
+    tpos.forEach((p,i)=> seats.push({ x:p[0], y:p[1], npc:(charSel+i+1)%CHARS.length })); }
   // ---- house furniture (Casa): bed, sofa, TV ----
   const HOME={ bed:{x:W*0.70,y:250,w:162,h:92}, sofa:{x:W*0.32,y:H*0.66,w:152,h:72}, tv:{x:W*0.32,y:H*0.66-150} };
   let homeAct='none';   // 'none' | 'bed' | 'sofa' | 'sit'
@@ -1218,6 +1225,7 @@ function phaseCity(){
     if(p.soccer){ A.x=W*0.3; A.y=H*0.5; initSoccer(); }
     else if(p.shop){ A.x=W/2; A.y=H-150; initMarket(); }
     else if(p.icecream){ A.x=W/2; A.y=H-150; initIce(); }
+    else if(p.diner){ A.x=W/2; A.y=H-150; initDiner(); }
     else if(p.home){ A.x=W/2; A.y=H-150; homeAct='none'; }
     else if(p.school){ A.x=W/2; A.y=H-150; initSchool(); }
     else if(p.funpark){ A.x=W/2; A.y=H-150; ride=null; wheelAng=0; coAng=0; }
@@ -1235,6 +1243,8 @@ function phaseCity(){
         cart++; it.pop=1; floaters.push({x:it.x,y:it.y-6,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
       if(inside.icecream){ for(const f of flavors){ if(Math.hypot(x-f.x,y-f.y)<32){
         cart++; f.pop=1; floaters.push({x:f.x,y:f.y-14,e:'🍦',life:1}); toast('Comprou sorvete de '+f.name+'! 🍦'); Sound.sfx('collect'); return; } } }
+      if(inside.diner){ for(const m of menu){ if(Math.hypot(x-m.x,y-m.y)<30){
+        cart++; m.pop=1; floaters.push({x:m.x,y:m.y-12,e:m.e,life:1}); toast('Comprou '+m.name+'! '+m.e); Sound.sfx('collect'); return; } } }
       if(inside.home){
         if(inRect(x,y,HOME.bed)){ homeAct='bed'; A.x=HOME.bed.x+8; A.y=HOME.bed.y; A.vx=A.vy=0; toast('Zzz... dormindo 😴'); Sound.sfx('blip'); return; }
         if(inRect(x,y,HOME.sofa)){ homeAct='sofa'; A.x=HOME.sofa.x; A.y=HOME.sofa.y-12; A.vx=A.vy=0; toast('Vendo TV 📺'); Sound.sfx('blip'); return; }
@@ -1290,6 +1300,7 @@ function phaseCity(){
         for(let i=floaters.length-1;i>=0;i--){ const f=floaters[i]; f.y-=1.4; f.life-=0.02; if(f.life<=0) floaters.splice(i,1); }
         shelf.forEach(s=> s.pop=Math.max(0,s.pop-0.08));
         flavors.forEach(f=> f.pop=Math.max(0,f.pop-0.08));
+        menu.forEach(m=> m.pop=Math.max(0,m.pop-0.08));
         if(Math.hypot(A.x-DOOR.x,A.y-DOOR.y)<42) leave();
         return;
       }
@@ -1304,6 +1315,7 @@ function phaseCity(){
       if(inside && inside.soccer){ drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB); return; }
       if(inside && inside.shop){ drawMarket(inside, A, DOOR, shelf, cart, floaters); return; }
       if(inside && inside.icecream){ drawIce(inside, A, DOOR, flavors, cart, floaters, iceClerk, t); return; }
+      if(inside && inside.diner){ drawDiner(inside, A, DOOR, menu, seats, cart, floaters, dinerClerk, t); return; }
       if(inside && inside.home){ drawHouse(inside, A, DOOR, HOME, homeAct, t); return; }
       if(inside && inside.school){ drawSchool(inside, A, DOOR, SCHOOL, desks, homeAct, t); return; }
       if(inside && inside.funpark){ drawFunpark(inside, A, DOOR, FUN, FLOORY, ride, wheelAng, coAng, t); return; }
@@ -1498,6 +1510,56 @@ function drawFunpark(p,A,DOOR,FUN,FLOORY,ride,wheelAng,coAng,t){
   vignette(0.28);
   banner(ride ? (ride==='wheel'?'🎡 Roda-gigante!':'🎢 Montanha-russa!') : '🎡 Parque de Diversões');
   hint(ride ? 'Aproveite a volta! 🎉' : 'Toque na roda-gigante 🎡 ou na montanha-russa 🎢 · 🚪/⤴ sai');
+}
+// snack bar: side register (menu to tap & buy) + 5 tables with customers
+function drawDinerTable(s){
+  ctx.fillStyle='#8a5a32'; rrect(s.x-13,s.y-32,26,14,4); ctx.fill();            // chair back
+  ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(s.x,s.y+24,34,8,0,0,7); ctx.fill();
+  ctx.fillStyle='#d24b4b'; ctx.beginPath(); ctx.ellipse(s.x,s.y+8,34,17,0,0,7); ctx.fill();   // round red table
+  ctx.fillStyle='#f0d6d6'; ctx.beginPath(); ctx.ellipse(s.x,s.y+5,30,13,0,0,7); ctx.fill();
+  ctx.fillStyle='#b53a3a'; ctx.fillRect(s.x-3,s.y+22,6,16);                     // leg
+  emoji('🍔', s.x-11, s.y+5, 15); emoji('🍟', s.x+11, s.y+4, 14);              // tray
+}
+function drawDiner(p,A,DOOR,menu,seats,cart,floaters,clerk,t){
+  ctx.fillStyle=p.wall||'#fff0c2'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=p.floor||'#caa46e'; ctx.fillRect(0,H*0.80,W,H*0.20);
+  ctx.fillStyle='rgba(0,0,0,.05)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.80,2,H*0.20);
+  // tables + customers + hero, depth-sorted
+  const list = seats.map(s=>({y:s.y,k:'seat',o:s}));
+  list.push({y:A.y,k:'me'});
+  list.sort((a,b)=>a.y-b.y);
+  for(const it of list){
+    if(it.k==='seat'){ drawDinerTable(it.o); drawChar(CHARS[it.o.npc], it.o.x, it.o.y-26, 0.78, 1, 0, null); }
+    else drawRoamer(A,0,0);
+  }
+  // ===== side register counter (left) =====
+  ctx.fillStyle='#c79a4e'; rrect(20,150,140,300,10); ctx.fill();                // counter body
+  ctx.fillStyle='#e0b86a'; rrect(20,150,140,16,10); ctx.fill();                 // top edge
+  ctx.fillStyle='#a87a3e'; ctx.fillRect(20,440,140,10);
+  // cashier behind the counter (uniform)
+  drawAttendant(88, 122, CHARS[clerk]);
+  // cash register box
+  ctx.fillStyle='#5b6b76'; rrect(120,176,30,24,4); ctx.fill();
+  ctx.fillStyle='#9fd0ff'; rrect(124,180,22,9,2); ctx.fill();
+  ctx.fillStyle='#cfe6ff'; ctx.fillRect(126,193,18,4);
+  // menu sign
+  ctx.fillStyle='#b33'; rrect(28,176,80,18,5); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('CARDÁPIO',68,185);
+  // menu items to tap (with little tray plates)
+  menu.forEach(m=>{ ctx.fillStyle='#f4f1e6'; ctx.beginPath(); ctx.ellipse(m.x,m.y+8,20,7,0,0,7); ctx.fill();
+    if(m.pop>0.04){ ctx.fillStyle='rgba(255,206,84,.5)'; ctx.beginPath(); ctx.arc(m.x,m.y,22*(1+m.pop),0,7); ctx.fill(); }
+    emoji(m.e, m.x, m.y - m.pop*4, 30*(1+m.pop*0.3));
+    ctx.fillStyle='#7a4a1a'; ctx.font='bold 11px Trebuchet MS'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(m.name, m.x+24, m.y); });
+  // floaters
+  floaters.forEach(f=>{ ctx.save(); ctx.globalAlpha=Math.max(0,f.life); emoji(f.e,f.x,f.y,22); ctx.restore(); });
+  // door
+  ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-34,DOOR.y-60,68,118,8); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(DOOR.x-28,DOOR.y-54,56,106,6); ctx.fill();
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(DOOR.x+16,DOOR.y,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('SAIR 🚪',DOOR.x,DOOR.y+70);
+  vignette(0.30);
+  banner('🍔 Pedidos: '+cart);
+  hint('Toque no cardápio para pedir 🍔🍟🥤 · 🚪/⤴ sai');
 }
 // house interior with a bed (sleep), sofa (sit) and a TV in front of the sofa
 function drawHouse(p,A,DOOR,HOME,act,t){
