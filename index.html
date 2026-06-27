@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Urso & o Amuleto</title>
+<style>
+  :root{
+    --bg1:#1a2238; --bg2:#0d1220; --gold:#ffce54; --gold2:#f6b73c;
+    --ink:#f4ecd6; --good:#7bd88f; --bad:#ff6b6b; --panel:#222b45;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:radial-gradient(120% 120% at 50% 0%, var(--bg1), var(--bg2));
+    color:var(--ink); font-family:"Trebuchet MS",system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    user-select:none;
+  }
+  #wrap{ position:relative; width:min(100vw,520px); height:min(100vh,820px); }
+  canvas{
+    width:100%; height:100%; display:block; border-radius:14px;
+    background:#0d1220; touch-action:none;
+    box-shadow:0 18px 50px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,206,84,.15);
+  }
+  /* HUD overlay */
+  #hud{
+    position:absolute; top:0; left:0; right:0; padding:10px 14px;
+    display:flex; justify-content:space-between; align-items:center;
+    pointer-events:none; font-weight:bold; text-shadow:0 2px 4px #000a;
+  }
+  #amulet{ display:flex; gap:5px; }
+  .gem{ width:18px; height:18px; border-radius:50%; background:#0006;
+        border:2px solid #ffffff33; transition:.4s; }
+  .gem.on{ background:var(--gold); border-color:#fff; box-shadow:0 0 10px var(--gold); }
+  /* Overlays / screens */
+  .screen{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:16px;
+    padding:28px; background:rgba(8,11,22,.82); backdrop-filter:blur(3px);
+    border-radius:14px; z-index:5;
+  }
+  .screen.hidden{ display:none; }
+  h1{ font-size:30px; color:var(--gold); text-shadow:0 3px 0 #0006; line-height:1.1;}
+  h2{ font-size:24px; color:var(--gold);}
+  p{ font-size:16px; max-width:340px; line-height:1.45; opacity:.95;}
+  .btn{
+    pointer-events:auto; cursor:pointer; border:none; outline:none;
+    background:linear-gradient(180deg,var(--gold),var(--gold2));
+    color:#3a2a08; font-weight:bold; font-size:18px; padding:13px 26px;
+    border-radius:30px; box-shadow:0 6px 0 #a9781f, 0 10px 18px #0008;
+    transition:transform .06s;
+  }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #a9781f; }
+  .small{ font-size:14px; opacity:.8; }
+  .bear-emoji{ font-size:64px; filter:drop-shadow(0 6px 8px #0008); }
+  .tag{ font-size:13px; letter-spacing:2px; opacity:.7; text-transform:uppercase;}
+  #toast{
+    position:absolute; left:50%; top:62px; transform:translateX(-50%);
+    background:#000a; padding:8px 16px; border-radius:20px; font-size:15px;
+    opacity:0; transition:.3s; z-index:6; pointer-events:none; white-space:nowrap;
+  }
+  #toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="phaseLabel" class="tag">Fase 1</div>
+    <div id="amulet">
+      <div class="gem"></div><div class="gem"></div>
+      <div class="gem"></div><div class="gem"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- START -->
+  <div class="screen" id="startScreen">
+    <div class="bear-emoji">🐻</div>
+    <h1>Urso &amp; o Amuleto</h1>
+    <p>Bartolomeu, o urso, perdeu o Amuleto Dourado em <b>4 pedaços</b>.
+       Complete o desafio de cada fase para recuperar cada pedaço e
+       <b>reconstruir o amuleto</b>!</p>
+    <button class="btn" id="startBtn">Começar aventura</button>
+    <p class="small">Toque / clique ou use as setas e a barra de espaço.</p>
+  </div>
+
+  <!-- PHASE INTRO -->
+  <div class="screen hidden" id="introScreen">
+    <div class="tag" id="introTag">Fase 1</div>
+    <div class="bear-emoji" id="introIcon">🌲</div>
+    <h2 id="introTitle"></h2>
+    <p id="introText"></p>
+    <button class="btn" id="introBtn">Iniciar desafio</button>
+  </div>
+
+  <!-- PHASE WIN -->
+  <div class="screen hidden" id="winScreen">
+    <div class="bear-emoji">🧩</div>
+    <h2>Pedaço conquistado!</h2>
+    <p id="winText"></p>
+    <button class="btn" id="winBtn">Continuar</button>
+  </div>
+
+  <!-- LOSE -->
+  <div class="screen hidden" id="loseScreen">
+    <div class="bear-emoji">😵</div>
+    <h2>Quase!</h2>
+    <p id="loseText">O desafio venceu desta vez.</p>
+    <button class="btn" id="loseBtn">Tentar de novo</button>
+  </div>
+
+  <!-- FINAL -->
+  <div class="screen hidden" id="finalScreen">
+    <div class="bear-emoji" id="finalAmulet">🏅</div>
+    <h1>Amuleto Completo!</h1>
+    <p>Bartolomeu juntou os 4 pedaços e reconstruiu o
+       <b>Amuleto Dourado</b>. A floresta está em paz novamente. 🎉</p>
+    <button class="btn" id="finalBtn">Jogar novamente</button>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+const W = 520, H = 820;            // logical resolution
+cv.width = W; cv.height = H;
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const rand = (a,b)=> a + Math.random()*(b-a);
+const clamp = (v,a,b)=> v<a?a:v>b?b:v;
+function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+let toastT=0;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1100); }
+
+// ---------- game state ----------
+const PHASES = [
+  { tag:'Fase 1 · A Floresta', icon:'🌲', title:'Mel da Floresta',
+    text:'Colete 8 potes de mel 🍯 movendo o urso, mas fuja das abelhas 🐝. Encoste numa abelha e perde o pedaço!' },
+  { tag:'Fase 2 · O Rio', icon:'🌊', title:'A Travessia',
+    text:'Pule de pedra em pedra para atravessar o rio. Toque/seta para pular no tempo certo. Caia na água e acabou!' },
+  { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória',
+    text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.' },
+  { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche',
+    text:'Desvie das rochas que caem 🪨 por 20 segundos para alcançar o último pedaço no topo!' },
+];
+const GEM_EMOJI = ['🔶','🔷','🟡','💎'];
+let pieces = 0;      // amulet pieces collected
+let phase = 0;       // current phase index
+let game = null;     // active phase object {update, draw, input}
+let keys = {};
+let pointer = {down:false, x:0, y:0};
+
+// ---------- input ----------
+addEventListener('keydown', e=>{ keys[e.key]=true;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  if(game && game.key) game.key(e.key);
+});
+addEventListener('keyup', e=>{ keys[e.key]=false; });
+function canvasPos(e){
+  const r=cv.getBoundingClientRect();
+  const p = e.touches? e.touches[0]: e;
+  return { x:(p.clientX-r.left)/r.width*W, y:(p.clientY-r.top)/r.height*H };
+}
+cv.addEventListener('mousedown', e=>{ const p=canvasPos(e); pointer.down=true; pointer.x=p.x; pointer.y=p.y; if(game&&game.tap)game.tap(p.x,p.y); });
+cv.addEventListener('mousemove', e=>{ if(!pointer.down)return; const p=canvasPos(e); pointer.x=p.x; pointer.y=p.y; });
+addEventListener('mouseup', ()=> pointer.down=false);
+cv.addEventListener('touchstart', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.down=true; pointer.x=p.x; pointer.y=p.y; if(game&&game.tap)game.tap(p.x,p.y); }, {passive:false});
+cv.addEventListener('touchmove', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.x=p.x; pointer.y=p.y; }, {passive:false});
+cv.addEventListener('touchend', e=>{ e.preventDefault(); pointer.down=false; }, {passive:false});
+
+// ---------- screen flow ----------
+function show(id){ ['startScreen','introScreen','winScreen','loseScreen','finalScreen']
+  .forEach(s=> $(s).classList.toggle('hidden', s!==id)); }
+function hideScreens(){ ['startScreen','introScreen','winScreen','loseScreen','finalScreen']
+  .forEach(s=> $(s).classList.add('hidden')); }
+
+function updateAmulet(){
+  document.querySelectorAll('#amulet .gem').forEach((g,i)=> g.classList.toggle('on', i<pieces));
+}
+
+function startGame(){ pieces=0; phase=0; updateAmulet(); $('hud').classList.remove('hidden'); intro(); }
+
+function intro(){
+  const p = PHASES[phase];
+  $('introTag').textContent = p.tag;
+  $('introIcon').textContent = p.icon;
+  $('introTitle').textContent = p.title;
+  $('introText').textContent = p.text;
+  $('phaseLabel').textContent = p.tag;
+  game=null;
+  show('introScreen');
+}
+function beginPhase(){
+  hideScreens();
+  game = makePhase(phase);
+}
+function losePhase(msg){
+  game=null;
+  $('loseText').textContent = msg || 'O desafio venceu desta vez.';
+  show('loseScreen');
+}
+function winPhase(){
+  game=null;
+  pieces++;
+  updateAmulet();
+  $('winText').textContent = `Você recuperou ${GEM_EMOJI[phase]} o pedaço ${pieces} de 4 do Amuleto Dourado!`;
+  show('winScreen');
+}
+function nextAfterWin(){
+  if(pieces>=4){ show('finalScreen'); confetti.start(); }
+  else { phase++; intro(); }
+}
+
+$('startBtn').onclick = startGame;
+$('introBtn').onclick = beginPhase;
+$('winBtn').onclick   = nextAfterWin;
+$('loseBtn').onclick  = beginPhase;   // retry same phase
+$('finalBtn').onclick = ()=>{ confetti.stop(); $('hud').classList.add('hidden'); show('startScreen'); };
+
+// ======================================================
+//  PHASES
+// ======================================================
+function makePhase(i){
+  if(i===0) return phaseForest();
+  if(i===1) return phaseRiver();
+  if(i===2) return phaseCave();
+  return phaseMountain();
+}
+
+// shared bear drawer ----------------------------------
+function drawBear(x,y,s=1,face=1){
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  // body
+  ctx.fillStyle='#8a5a32';
+  ctx.beginPath(); ctx.arc(0,0,22,0,7); ctx.fill();
+  // ears
+  ctx.beginPath(); ctx.arc(-15,-18,8,0,7); ctx.arc(15,-18,8,0,7); ctx.fill();
+  ctx.fillStyle='#6f4524';
+  ctx.beginPath(); ctx.arc(-15,-18,4,0,7); ctx.arc(15,-18,4,0,7); ctx.fill();
+  // snout
+  ctx.fillStyle='#d9b48a';
+  ctx.beginPath(); ctx.ellipse(0,7,11,8,0,0,7); ctx.fill();
+  // eyes
+  ctx.fillStyle='#241405';
+  ctx.beginPath(); ctx.arc(-8*face,-3,2.6,0,7); ctx.arc(8*face,-3,2.6,0,7); ctx.fill();
+  // nose
+  ctx.beginPath(); ctx.arc(0,3,3,0,7); ctx.fill();
+  ctx.restore();
+}
+
+// ---------- PHASE 1: FOREST (collect honey, avoid bees) ----------
+function phaseForest(){
+  const bear={x:W/2,y:H-120,r:22,sp:5};
+  let honey=[], bees=[], collected=0, need=8, t=0;
+  for(let k=0;k<need+2;k++) honey.push(spawnHoney());
+  for(let k=0;k<3;k++) bees.push(spawnBee());
+  function spawnHoney(){ return {x:rand(40,W-40), y:rand(120,H-160), got:false}; }
+  function spawnBee(){ const e=Math.random()<.5; return {
+    x: e?-20:W+20, y:rand(120,H-200),
+    vx:(e?1:-1)*rand(2,3.4), vy:rand(-1,1), };
+  }
+  return {
+    update(){
+      t++;
+      // bear move (keys)
+      if(keys.ArrowLeft) bear.x-=bear.sp;
+      if(keys.ArrowRight) bear.x+=bear.sp;
+      if(keys.ArrowUp) bear.y-=bear.sp;
+      if(keys.ArrowDown) bear.y+=bear.sp;
+      // pointer follow
+      if(pointer.down){ bear.x += clamp(pointer.x-bear.x,-bear.sp,bear.sp);
+                        bear.y += clamp(pointer.y-bear.y,-bear.sp,bear.sp); }
+      bear.x=clamp(bear.x,bear.r,W-bear.r); bear.y=clamp(bear.y,110+bear.r,H-bear.r);
+      // honey
+      honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-bear.x,h.y-bear.y)<bear.r+10){
+        h.got=true; collected++; toast('Mel! '+collected+'/'+need);
+        if(collected>=need){ winPhase(); }
+      }});
+      // bees
+      if(t%160===0 && bees.length<6) bees.push(spawnBee());
+      bees.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
+        if(b.y<110||b.y>H-30) b.vy*=-1;
+        if(Math.hypot(b.x-bear.x,b.y-bear.y)<bear.r+9){ losePhase('Uma abelha picou o urso! 🐝'); }
+      });
+      bees = bees.filter(b=> b.x>-40 && b.x<W+40);
+    },
+    draw(){
+      // forest bg
+      ctx.fillStyle='#16321f'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#1d3f28';
+      for(let i=0;i<8;i++){ const x=(i*70+ (t*0)%70); ctx.beginPath();
+        ctx.moveTo(x,H); ctx.lineTo(x+30,H-110); ctx.lineTo(x+60,H); ctx.fill(); }
+      // progress
+      banner('Mel: '+collected+'/'+need);
+      honey.forEach(h=>{ if(h.got)return; emoji('🍯',h.x,h.y,26); });
+      bees.forEach(b=> emoji('🐝',b.x,b.y,24));
+      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1);
+    }
+  };
+}
+
+// ---------- PHASE 2: RIVER (timing jumps between stones) ----------
+function phaseRiver(){
+  // bear jumps forward across moving stones; press to jump, must land on a stone
+  const lanes = H-200;
+  let bear={x:90,y:H-140,vy:0,onStone:true,prog:0};
+  let stones=[]; let need=7; let scroll=0; let alive=true;
+  // stones laid out going up; create chain
+  let sy=H-140;
+  for(let i=0;i<need+4;i++){ sy-= rand(120,150);
+    stones.push({x:rand(70,W-70), y:sy, r:34, ph:rand(0,6), drift:rand(.4,1.1)*(Math.random()<.5?-1:1)});
+  }
+  let target=0;        // index of next stone to reach
+  let jumping=false, jx0=0,jy0=0,jx1=0,jy1=0,jt=0;
+  function startJump(){
+    if(jumping||!alive) return;
+    const s=stones[target];
+    jx0=bear.x; jy0=bear.y; jx1=s.x; jy1=s.y; jt=0; jumping=true;
+  }
+  return {
+    key(k){ if(k===' '||k==='ArrowUp') startJump(); },
+    tap(){ startJump(); },
+    update(){
+      // stones drift sideways
+      stones.forEach(s=>{ s.x+=Math.sin((performance.now()/700)+s.ph)*s.drift; });
+      if(jumping){
+        jt+=0.045;
+        const e=Math.min(jt,1);
+        bear.x=jx0+(jx1-jx0)*e;
+        bear.y=jy0+(jy1-jy0)*e - Math.sin(e*Math.PI)*70; // arc
+        if(jt>=1){
+          jumping=false;
+          const s=stones[target];
+          bear.x=s.x; bear.y=s.y-6;
+          if(Math.abs(bear.x - s.x) < s.r){ // landed (always true since we snap) -> reward
+            target++; bear.prog=target;
+            if(target>= need){ winPhase(); }
+          }
+        }
+      } else {
+        // ride the stone drift
+        if(target< stones.length){ const s=stones[Math.max(0,target-1)]; bear.x=s.x; bear.y=s.y-6; }
+      }
+      // camera follow: shift so current stone near bottom third
+      const wantY = H-220;
+      const cur = stones[Math.max(0,target-1)] || stones[0];
+      const targetScroll = wantY - cur.y;
+      scroll += (targetScroll-scroll)*0.08;
+    },
+    draw(){
+      // river bg
+      const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#123a5e'); g.addColorStop(1,'#0a2238');
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      // water lines
+      ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=3;
+      for(let y=(scroll%40); y<H; y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      ctx.save(); ctx.translate(0,scroll);
+      stones.forEach((s,i)=>{
+        ctx.fillStyle = i===target? '#9aa7b0' : (i<target? '#5d6b73':'#7f8c95');
+        ctx.beginPath(); ctx.ellipse(s.x,s.y+8,s.r,s.r*0.5,0,0,7); ctx.fill();
+        ctx.fillStyle = i===target? '#c4d0d8':'#aab6bd';
+        ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*0.45,0,0,7); ctx.fill();
+        if(i===target){ ctx.strokeStyle='#ffce54'; ctx.lineWidth=3; ctx.stroke(); }
+      });
+      drawBear(bear.x,bear.y-14,0.9,1);
+      ctx.restore();
+      banner('Pedras: '+Math.min(target,need)+'/'+need);
+      hint('Toque para pular na pedra brilhante');
+    }
+  };
+}
+
+// ---------- PHASE 3: CAVE (memory / Simon) ----------
+function phaseCave(){
+  const cols=['#ff6b6b','#7bd88f','#5b8cff','#ffce54'];
+  const lit=['#ffd9d9','#d6ffe1','#cfe0ff','#fff0c2'];
+  const cells=[]; // 4 crystals
+  const cx=[W*0.32,W*0.68,W*0.32,W*0.68];
+  const cyA=[H*0.40,H*0.40,H*0.66,H*0.66];
+  for(let i=0;i<4;i++) cells.push({x:cx[i],y:cyA[i],r:62,flash:0});
+  let seq=[], step=0, round=0, need=4;
+  let state='show'; // show | input | wait
+  let showIdx=0, showT=0, inputIdx=0;
+  function nextRound(){ round++; seq.push(Math.floor(rand(0,4))); state='show'; showIdx=0; showT=0; inputIdx=0; }
+  nextRound();
+  function flash(i){ cells[i].flash=1; }
+  return {
+    tap(x,y){
+      if(state!=='input') return;
+      for(let i=0;i<4;i++){ if(Math.hypot(cells[i].x-x,cells[i].y-y)<cells[i].r){
+        flash(i);
+        if(seq[inputIdx]===i){
+          inputIdx++;
+          if(inputIdx>=seq.length){
+            if(round>=need){ setTimeout(winPhase,300); state='wait'; }
+            else { state='wait'; setTimeout(nextRound,600); }
+          }
+        } else { losePhase('Sequência errada! A caverna se fechou.'); }
+        break;
+      }}
+    },
+    update(){
+      cells.forEach(c=> c.flash=Math.max(0,c.flash-0.05));
+      if(state==='show'){
+        showT++;
+        if(showT===20){ flash(seq[showIdx]); }
+        if(showT>=46){ showT=0; showIdx++;
+          if(showIdx>=seq.length){ state='input'; inputIdx=0; } }
+      }
+    },
+    draw(){
+      const g=ctx.createRadialGradient(W/2,H/2,40,W/2,H/2,W*0.8);
+      g.addColorStop(0,'#2a2140'); g.addColorStop(1,'#0c0a16');
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      cells.forEach((c,i)=>{
+        ctx.save(); ctx.translate(c.x,c.y);
+        const f=c.flash;
+        ctx.shadowColor=cols[i]; ctx.shadowBlur=20+40*f;
+        ctx.fillStyle = f>0.05? lit[i]: cols[i];
+        // crystal diamond
+        ctx.beginPath(); ctx.moveTo(0,-c.r); ctx.lineTo(c.r*0.7,0);
+        ctx.lineTo(0,c.r); ctx.lineTo(-c.r*0.7,0); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      });
+      banner('Rodada '+round+'/'+need);
+      hint(state==='show'?'Memorize a sequência...':
+           state==='input'?'Sua vez! Repita a ordem': 'Boa!');
+      // bear watching at bottom
+      drawBear(W/2,H-90,0.8,1);
+    }
+  };
+}
+
+// ---------- PHASE 4: MOUNTAIN (dodge falling rocks, survive 20s) ----------
+function phaseMountain(){
+  const bear={x:W/2,y:H-90,r:20,sp:6};
+  let rocks=[], t=0, survive=20*60, spawnRate=42;
+  function spawnRock(){ rocks.push({x:rand(20,W-20), y:-30, r:rand(14,26), v:rand(3.5,6)}); }
+  return {
+    update(){
+      t++;
+      if(keys.ArrowLeft) bear.x-=bear.sp;
+      if(keys.ArrowRight) bear.x+=bear.sp;
+      if(pointer.down) bear.x += clamp(pointer.x-bear.x,-bear.sp*1.4,bear.sp*1.4);
+      bear.x=clamp(bear.x,bear.r,W-bear.r);
+      if(t%spawnRate===0){ spawnRock(); if(spawnRate>14)spawnRate-=1; }
+      rocks.forEach(r=>{ r.y+=r.v;
+        if(Math.hypot(r.x-bear.x,r.y-bear.y)<bear.r+r.r-4){ losePhase('Uma rocha atingiu o urso! 🪨'); }
+      });
+      rocks=rocks.filter(r=> r.y<H+40);
+      if(t>=survive){ winPhase(); }
+    },
+    draw(){
+      const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3a3550'); g.addColorStop(1,'#15131f');
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      // mountain
+      ctx.fillStyle='#262234';
+      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W*0.5,120); ctx.lineTo(W,H); ctx.fill();
+      ctx.fillStyle='#ece9f5';
+      ctx.beginPath(); ctx.moveTo(W*0.5,120); ctx.lineTo(W*0.42,210); ctx.lineTo(W*0.5,190); ctx.lineTo(W*0.58,210); ctx.fill();
+      rocks.forEach(r=>{ ctx.fillStyle='#7a6a52';
+        ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.fill();
+        ctx.fillStyle='#5d5040'; ctx.beginPath(); ctx.arc(r.x-r.r*0.3,r.y-r.r*0.3,r.r*0.4,0,7); ctx.fill(); });
+      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1);
+      const left=Math.ceil((survive-t)/60);
+      banner('Sobreviva: '+left+'s');
+    }
+  };
+}
+
+// ---------- UI draw helpers ----------
+function banner(txt){
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.35)'; rrect(W/2-110,52,220,30,15); ctx.fill();
+  ctx.fillStyle='#ffce54'; ctx.font='bold 18px Trebuchet MS';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(txt,W/2,68); ctx.restore();
+}
+function hint(txt){
+  ctx.save(); ctx.fillStyle='rgba(255,255,255,.85)'; ctx.font='15px Trebuchet MS';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(txt,W/2,H-28); ctx.restore();
+}
+function emoji(ch,x,y,size){
+  ctx.save(); ctx.font=size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(ch,x,y); ctx.restore();
+}
+
+// ---------- confetti for final ----------
+const confetti = (()=>{
+  let parts=[], on=false;
+  return {
+    start(){ on=true; parts=[]; for(let i=0;i<120;i++) parts.push({
+      x:rand(0,W), y:rand(-H,0), s:rand(4,9), v:rand(2,5),
+      c:`hsl(${rand(0,60)},90%,60%)`, sw:rand(-1,1) }); },
+    stop(){ on=false; parts=[]; },
+    draw(){ if(!on)return; parts.forEach(p=>{ p.y+=p.v; p.x+=Math.sin(p.y/30)*p.sw;
+      if(p.y>H){ p.y=-10; p.x=rand(0,W); }
+      ctx.fillStyle=p.c; ctx.fillRect(p.x,p.y,p.s,p.s*1.6); }); }
+  };
+})();
+
+// ---------- main loop ----------
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  if(game){ game.update(); game.draw(); }
+  else { // idle background behind menus
+    ctx.fillStyle='#0d1220'; ctx.fillRect(0,0,W,H);
+  }
+  confetti.draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
