@@ -150,7 +150,7 @@ const PHASES = [
   { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória',
     text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.' },
   { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche',
-    text:'Desvie das rochas que caem 🪨 por 15 segundos para alcançar o último pedaço no topo!' },
+    text:'O urso sobe a montanha correndo! Toque (ou Espaço) para PULAR sobre as rochas 🪨 da avalanche e chegar ao cume para pegar o último pedaço.' },
 ];
 const GEM_EMOJI = ['🔶','🔷','🟡','💎'];
 let pieces = 0;      // amulet pieces collected
@@ -523,60 +523,85 @@ function phaseCave(){
   };
 }
 
-// ---------- PHASE 4: MOUNTAIN (dodge falling rocks, survive 15s) ----------
+// ---------- PHASE 4: MOUNTAIN (side-scrolling climb, jump the rocks) ----------
 function phaseMountain(){
-  const bear={x:W/2,y:H-90,r:20,sp:8};
-  let rocks=[], t=0, survive=15*60, spawnRate=58;
-  function spawnRock(){ rocks.push({x:rand(20,W-20), y:-30, r:rand(13,22), v:rand(2.6,4.2)}); }
+  const groundY = H-110;
+  const bear = { x:130, y:groundY, vy:0, onGround:true, runT:0 };
+  const GRAV=0.8, JUMP=-15.5;
+  let worldX=0, speed=4.7, t=0, lost=false;
+  const goal=4400;                              // distance to the summit
+  // rolling boulders along the trail (jump over them)
+  const rocks=[]; let wx=560;
+  for(let i=0;i<40;i++){ rocks.push({wx, r:rand(15,22), got:false}); wx += rand(180,300); }
+  function jump(){ if(bear.onGround && !lost){ bear.vy=JUMP; bear.onGround=false; } }
+  function ridge(speed, color, ay, by){        // scrolling mountain ridge layer
+    const span=520, off=(worldX*speed)%span;
+    ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(-off-span,H);
+    for(let x=-off-span; x<W+span; x+=span){
+      ctx.lineTo(x+span*0.5, ay); ctx.lineTo(x+span, by);
+    }
+    ctx.lineTo(W+span,H); ctx.closePath(); ctx.fill();
+  }
   return {
+    key(k){ if(k===' '||k==='ArrowUp') jump(); },
+    tap(){ jump(); },
     update(){
       t++;
-      if(keys.ArrowLeft) bear.x-=bear.sp;
-      if(keys.ArrowRight) bear.x+=bear.sp;
-      if(pointer.down) bear.x += clamp(pointer.x-bear.x,-bear.sp*1.8,bear.sp*1.8);
-      bear.x=clamp(bear.x,bear.r,W-bear.r);
-      // spawn rocks; ramp up gently and stop getting harder near the end
-      if(t%spawnRate===0){ spawnRock(); if(spawnRate>26 && t%(spawnRate*2)===0) spawnRate-=2; }
-      rocks.forEach(r=>{ r.y+=r.v;
-        if(Math.hypot(r.x-bear.x,r.y-bear.y)<bear.r+r.r-8){ losePhase('Uma rocha atingiu o urso! 🪨'); }
-      });
-      rocks=rocks.filter(r=> r.y<H+40);
-      if(t>=survive){ winPhase(); }
+      if(lost) return;
+      let sp=speed;
+      if(keys.ArrowRight) sp=speed*1.6;
+      if(keys.ArrowLeft)  sp=speed*0.6;
+      worldX += sp;
+      if(bear.onGround) bear.runT += sp*0.07;
+      bear.vy += GRAV; bear.y += bear.vy;
+      if(bear.y>=groundY){ bear.y=groundY; bear.vy=0; bear.onGround=true; }
+      for(const r of rocks){
+        if(r.got) continue;
+        const sx = bear.x + (r.wx - worldX);
+        if(sx < -60){ r.got=true; continue; }
+        r.sx=sx;
+        if(sx>bear.x-26 && sx<bear.x+24 && bear.y>groundY-30){
+          lost=true; losePhase('Uma rocha atingiu o urso! 🪨 Pule sobre ela.'); return;
+        }
+      }
+      if(worldX>=goal){ winPhase(); return; }
     },
     draw(){
       // dusk sky
       const g=ctx.createLinearGradient(0,0,0,H);
       g.addColorStop(0,'#2b3a6b'); g.addColorStop(0.5,'#5a4a72'); g.addColorStop(1,'#241a2e');
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      // stars
+      // stars (parallax-drift very slowly)
       ctx.fillStyle='rgba(255,255,255,.7)';
-      for(let i=0;i<26;i++){ const sx=(i*97+31)%W, sy=(i*53+17)%260; ctx.fillRect(sx,sy,2,2); }
-      // back mountain range
-      ctx.fillStyle='#3b3552';
-      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W*0.25,H*0.45); ctx.lineTo(W*0.5,H*0.7);
-      ctx.lineTo(W*0.78,H*0.40); ctx.lineTo(W,H*0.72); ctx.lineTo(W,H); ctx.fill();
-      // main mountain
-      ctx.fillStyle='#2b2740';
-      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W*0.5,110); ctx.lineTo(W,H); ctx.fill();
-      // snow cap
-      ctx.fillStyle='#eef0fb';
-      ctx.beginPath(); ctx.moveTo(W*0.5,110); ctx.lineTo(W*0.41,205);
-      ctx.lineTo(W*0.47,182); ctx.lineTo(W*0.5,200); ctx.lineTo(W*0.53,182);
-      ctx.lineTo(W*0.59,205); ctx.fill();
-      // ground ledge
-      ctx.fillStyle='#221b30'; ctx.fillRect(0,H-46,W,46);
-      // rocks with shading
-      rocks.forEach(r=>{
-        ctx.fillStyle='#8a795e';
-        ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.fill();
-        ctx.fillStyle='#6b5c45';
-        ctx.beginPath(); ctx.arc(r.x+r.r*0.3,r.y+r.r*0.3,r.r*0.6,0,7); ctx.fill();
-        ctx.fillStyle='#a89478';
-        ctx.beginPath(); ctx.arc(r.x-r.r*0.32,r.y-r.r*0.32,r.r*0.32,0,7); ctx.fill();
-      });
-      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1, Math.sin(t*0.4)*2);
-      const left=Math.ceil((survive-t)/60);
-      banner('Sobreviva: '+left+'s');
+      const soff=(worldX*0.05)%W;
+      for(let i=0;i<26;i++){ let sx=((i*97+31)-soff)%W; if(sx<0)sx+=W; ctx.fillRect(sx,(i*53+17)%250,2,2); }
+      // parallax mountain ridges (far -> near)
+      ridge(0.12, '#33304d', H*0.42, H*0.60);
+      ridge(0.28, '#2b2740', H*0.55, H*0.74);
+      ridge(0.50, '#221d33', H*0.70, H*0.86);
+      // snowy trail ground
+      ctx.fillStyle='#3a3450'; ctx.fillRect(0,groundY+24,W,H-groundY-24);
+      ctx.fillStyle='#cfd3ec'; ctx.fillRect(0,groundY+24,W,6);
+      const goff=(worldX)%30;                  // moving snow specks
+      ctx.fillStyle='#9aa0c4';
+      for(let x=-goff; x<W; x+=30){ ctx.fillRect(x,groundY+34,4,3); }
+      // rolling boulders (rotate as they travel)
+      for(const r of rocks){ if(r.got||r.sx===undefined) continue;
+        if(r.sx<-40||r.sx>W+40) continue;
+        ctx.save(); ctx.translate(r.sx, groundY+14); ctx.rotate(-worldX*0.03);
+        ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
+        ctx.fillStyle='#6b5c45'; ctx.beginPath(); ctx.arc(r.r*0.3,r.r*0.3,r.r*0.55,0,7); ctx.fill();
+        ctx.fillStyle='#a89478'; ctx.beginPath(); ctx.arc(-r.r*0.3,-r.r*0.3,r.r*0.3,0,7); ctx.fill();
+        ctx.restore();
+      }
+      // bear
+      drawBear(bear.x, bear.y-24, 1, 1, 0, bear.onGround? bear.runT : 'jump');
+      // climb progress bar
+      const pct = clamp(worldX/goal,0,1);
+      ctx.fillStyle='rgba(0,0,0,.3)'; rrect(40,H-30,W-80,12,6); ctx.fill();
+      ctx.fillStyle='#ffce54'; rrect(40,H-30,(W-80)*pct,12,6); ctx.fill();
+      emoji('⛰️', W-30, H-24, 22);
+      banner('Subida: '+Math.round(pct*100)+'%');
     }
   };
 }
