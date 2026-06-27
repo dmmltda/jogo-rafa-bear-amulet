@@ -1165,7 +1165,7 @@ function phaseCity(){
     {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5, wall:'#d8ecd8', floor:'#b89a6a', props:['📚','✏️','🍎','🧑‍🏫','🌍']},
     {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4, wall:'#ffe3ef', floor:'#e8c9a0', props:['🍦','🍨','🍧','🧁']},
     {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Fez comprinhas no mercado! 🛒', coin:3, wall:'#e6efff', floor:'#c8b48a', props:['🛒','🥫','🍞','🧀','🍎']},
-    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Brincou no parque! 🎉', coin:4, wall:'#bfe8ff', floor:'#7fc06a', props:['🌳','🎈','🪁','⚽','🌷']},
+    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true},
     {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3, wall:'#eef6ff', floor:'#cfd6dc', props:['🩺','💊','🛏️','➕']},
     {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Que aventura! 🎡', coin:6, wall:'#ffe7c2', floor:'#d8a86a', props:['🎡','🎠','🎢','🎈','🍿']},
     {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hmm, um lanche! 🍔', coin:4, wall:'#fff0c2', floor:'#caa46e', props:['🍔','🍟','🥤','🌭','🍕']},
@@ -1175,19 +1175,50 @@ function phaseCity(){
     if(places.some(p=>Math.hypot(p.x-x,p.y-y)<150)) continue;
     blds.push({x,y,w:rand(72,120),h:rand(74,138),c:`hsl(${(i*47)%360},42%,68%)`,roof:roofs[i%roofs.length]}); }
   cam.snap(A.x,A.y);
+  // ---- soccer mini-game state (Parque) ----
+  let ball=null, npcs=[], scoreYou=0, scoreThem=0;
+  const FT=120, FB=H-70;                       // field top/bottom
+  function resetBall(){ ball={x:W/2,y:H/2,vx:0,vy:0,r:13}; }
+  function initSoccer(){ resetBall(); scoreYou=0; scoreThem=0; npcs=[];
+    for(let i=0;i<3;i++) npcs.push({ x:rand(80,W-80), y:rand(FT+40,FB-40), vx:0, vy:0, face:1, walk:0,
+      char:(charSel+1+i)%CHARS.length }); }
+  function kick(px,py,pvx,pvy){ const dx=ball.x-px, dy=ball.y-py; const d=Math.hypot(dx,dy);
+    if(d<ball.r+19){ const nx=dx/(d||1), ny=dy/(d||1); const power=4.2+Math.hypot(pvx,pvy)*0.9;
+      ball.vx=nx*power+pvx*0.5; ball.vy=ny*power+pvy*0.5; ball.x=px+nx*(ball.r+19); ball.y=py+ny*(ball.r+19); Sound.sfx('jump'); } }
   function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<78) return p; } return null; }
-  function enter(p){ inside=p; cityX=A.x; cityY=A.y; A.x=W/2; A.y=170; A.vx=A.vy=0; A.hopY=0; A.onGround=true;
+  function enter(p){ inside=p; cityX=A.x; cityY=A.y; A.vx=A.vy=0; A.hopY=0; A.onGround=true;
+    if(p.soccer){ A.x=W*0.3; A.y=H*0.5; initSoccer(); } else { A.x=W/2; A.y=170; }
     addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
   function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
   const DOOR={x:W/2, y:H-92};
+  function moveActor(o,acc,fr,mx,minX,maxX,minY,maxY){ o.vx*=fr; o.vy*=fr;
+    const s=Math.hypot(o.vx,o.vy); if(s>mx){ o.vx*=mx/s; o.vy*=mx/s; }
+    o.x=clamp(o.x+o.vx,minX,maxX); o.y=clamp(o.y+o.vy,minY,maxY);
+    if(Math.abs(o.vx)>0.2) o.face=o.vx>0?1:-1; o.moving=Math.hypot(o.vx,o.vy); o.walk=(o.walk||0)+o.moving*0.17; }
   return {
+    tap(x,y){ if(inside && !inside.soccer && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
-      if(inside){
-        takeJump();  // ignore jumps indoors
-        const ax=readAxis(); A.vx+=ax.x*0.9; A.vy+=ax.y*0.9; A.vx*=0.8; A.vy*=0.8;
-        const sp=Math.hypot(A.vx,A.vy); if(sp>5){ A.vx*=5/sp; A.vy*=5/sp; }
-        A.x=clamp(A.x+A.vx,48,W-48); A.y=clamp(A.y+A.vy,150,H-70);
-        if(Math.abs(A.vx)>0.25) A.face=A.vx>0?1:-1; A.moving=Math.hypot(A.vx,A.vy); A.walk+=A.moving*0.17;
+      if(inside && inside.soccer){            // ===== PARK SOCCER =====
+        if(jumpQueued){ jumpQueued=false; leave(); return; }
+        const ax=readAxis(); A.vx+=ax.x*0.95; A.vy+=ax.y*0.95;
+        moveActor(A,0,0.82,5.2,28,W-28,FT+10,FB-10);
+        npcs.forEach(n=>{ const dx=ball.x-n.x, dy=ball.y-n.y, d=Math.hypot(dx,dy)||1;
+          n.vx+=dx/d*0.28; n.vy+=dy/d*0.28; moveActor(n,0,0.9,3.3,28,W-28,FT+10,FB-10); });
+        ball.x+=ball.vx; ball.y+=ball.vy; ball.vx*=0.975; ball.vy*=0.975;
+        if(ball.y<FT+ball.r){ ball.y=FT+ball.r; ball.vy*=-0.7; }
+        if(ball.y>FB-ball.r){ ball.y=FB-ball.r; ball.vy*=-0.7; }
+        kick(A.x,A.y,A.vx,A.vy); npcs.forEach(n=>kick(n.x,n.y,n.vx,n.vy));
+        const gTop=H*0.5-72, gBot=H*0.5+72;
+        if(ball.x<26){ if(ball.y>gTop&&ball.y<gBot){ scoreThem++; toast('Gol dos amigos! 🥅'); Sound.sfx('lose'); resetBall(); }
+          else { ball.x=26; ball.vx*=-0.7; } }
+        if(ball.x>W-26){ if(ball.y>gTop&&ball.y<gBot){ scoreYou++; addCoins(3); toast('GOOOL! ⚽ +3 🪙'); Sound.sfx('win'); resetBall(); }
+          else { ball.x=W-26; ball.vx*=-0.7; } }
+        return;
+      }
+      if(inside){                              // ===== generic interior =====
+        if(jumpQueued){ jumpQueued=false; leave(); return; }
+        const ax=readAxis(); A.vx+=ax.x*0.9; A.vy+=ax.y*0.9;
+        moveActor(A,0,0.8,5,48,W-48,150,H-70);
         if(Math.hypot(A.x-DOOR.x,A.y-DOOR.y)<42) leave();
         return;
       }
@@ -1199,6 +1230,7 @@ function phaseCity(){
       cam.follow(A.x,A.y,0.12);
     },
     draw(){
+      if(inside && inside.soccer){ drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB); return; }
       if(inside){ drawCityInterior(inside, A, DOOR); return; }
       const ox=-cam.x, oy=-cam.y;
       ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
@@ -1224,6 +1256,43 @@ function phaseCity(){
       hint('Direcional/WASD para andar · ⤴ entra nos lugares · 👕 roupa');
     }
   };
+}
+// park soccer field with the hero + friends
+function drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB){
+  // pitch
+  const g=ctx.createLinearGradient(0,FT,0,FB); g.addColorStop(0,'#5db35a'); g.addColorStop(1,'#479147');
+  ctx.fillStyle='#7cc06a'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=g; ctx.fillRect(0,FT,W,FB-FT);
+  // mowed stripes
+  ctx.fillStyle='rgba(255,255,255,.05)';
+  for(let x=0;x<W;x+=64) ctx.fillRect(x,FT,32,FB-FT);
+  // lines
+  ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=3;
+  ctx.strokeRect(16,FT+6,W-32,FB-FT-12);
+  ctx.beginPath(); ctx.moveTo(W/2,FT+6); ctx.lineTo(W/2,FB-6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2,(FT+FB)/2,46,0,7); ctx.stroke();
+  // goals (left & right)
+  const gTop=H*0.5-72, gBot=H*0.5+72;
+  ctx.fillStyle='rgba(255,255,255,.85)';
+  ctx.fillRect(6,gTop,12,gBot-gTop); ctx.fillRect(W-18,gTop,12,gBot-gTop);
+  ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1;
+  for(let yy=gTop;yy<gBot;yy+=10){ ctx.beginPath(); ctx.moveTo(6,yy); ctx.lineTo(18,yy); ctx.stroke(); }
+  for(let yy=gTop;yy<gBot;yy+=10){ ctx.beginPath(); ctx.moveTo(W-18,yy); ctx.lineTo(W-6,yy); ctx.stroke(); }
+  // actors + ball, depth-sorted by y
+  const list=[{y:A.y,k:'me'},{y:ball.y,k:'ball'}];
+  npcs.forEach(n=>list.push({y:n.y,k:'npc',o:n}));
+  list.sort((a,b)=>a.y-b.y);
+  for(const d of list){
+    if(d.k==='ball'){ ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(ball.x,ball.y+10,ball.r,5,0,0,7); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.strokeStyle='#333'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r*0.4,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(ball.x-ball.r*0.5,ball.y-ball.r*0.4,ball.r*0.22,0,7); ctx.arc(ball.x+ball.r*0.5,ball.y+ball.r*0.4,ball.r*0.22,0,7); ctx.fill();
+    } else if(d.k==='me'){ const pose=A.moving>0.5?A.walk:null; drawChar(CHARS[charSel],A.x,A.y-12,1,A.face,0,pose);
+    } else { const n=d.o; const pose=(n.moving||0)>0.5?n.walk:null; drawChar(CHARS[n.char],n.x,n.y-12,1,n.face,0,pose); }
+  }
+  vignette(0.3);
+  banner('⚽ Você '+scoreYou+'  —  '+scoreThem+' Amigos');
+  hint('Direcional/WASD: corra e chute a bola · ⤴ para sair 🚪');
 }
 // interior mini-scene of a city place
 function drawCityInterior(p, A, DOOR){
