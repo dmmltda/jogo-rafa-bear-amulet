@@ -150,7 +150,7 @@ const PHASES = [
   { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória',
     text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.' },
   { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche',
-    text:'Desvie das rochas que caem 🪨 por 20 segundos para alcançar o último pedaço no topo!' },
+    text:'Desvie das rochas que caem 🪨 por 15 segundos para alcançar o último pedaço no topo!' },
 ];
 const GEM_EMOJI = ['🔶','🔷','🟡','💎'];
 let pieces = 0;      // amulet pieces collected
@@ -448,21 +448,22 @@ function phaseCave(){
   };
 }
 
-// ---------- PHASE 4: MOUNTAIN (dodge falling rocks, survive 20s) ----------
+// ---------- PHASE 4: MOUNTAIN (dodge falling rocks, survive 15s) ----------
 function phaseMountain(){
-  const bear={x:W/2,y:H-90,r:20,sp:6};
-  let rocks=[], t=0, survive=20*60, spawnRate=42;
-  function spawnRock(){ rocks.push({x:rand(20,W-20), y:-30, r:rand(14,26), v:rand(3.5,6)}); }
+  const bear={x:W/2,y:H-90,r:20,sp:8};
+  let rocks=[], t=0, survive=15*60, spawnRate=58;
+  function spawnRock(){ rocks.push({x:rand(20,W-20), y:-30, r:rand(13,22), v:rand(2.6,4.2)}); }
   return {
     update(){
       t++;
       if(keys.ArrowLeft) bear.x-=bear.sp;
       if(keys.ArrowRight) bear.x+=bear.sp;
-      if(pointer.down) bear.x += clamp(pointer.x-bear.x,-bear.sp*1.4,bear.sp*1.4);
+      if(pointer.down) bear.x += clamp(pointer.x-bear.x,-bear.sp*1.8,bear.sp*1.8);
       bear.x=clamp(bear.x,bear.r,W-bear.r);
-      if(t%spawnRate===0){ spawnRock(); if(spawnRate>14)spawnRate-=1; }
+      // spawn rocks; ramp up gently and stop getting harder near the end
+      if(t%spawnRate===0){ spawnRock(); if(spawnRate>26 && t%(spawnRate*2)===0) spawnRate-=2; }
       rocks.forEach(r=>{ r.y+=r.v;
-        if(Math.hypot(r.x-bear.x,r.y-bear.y)<bear.r+r.r-4){ losePhase('Uma rocha atingiu o urso! 🪨'); }
+        if(Math.hypot(r.x-bear.x,r.y-bear.y)<bear.r+r.r-8){ losePhase('Uma rocha atingiu o urso! 🪨'); }
       });
       rocks=rocks.filter(r=> r.y<H+40);
       if(t>=survive){ winPhase(); }
