@@ -69,6 +69,27 @@
   }
   #skipBtn.hidden{ display:none; }
   #hud.hidden{ display:none; }
+  /* Roblox-style touch controls */
+  #touch{ position:absolute; inset:0; z-index:6; pointer-events:none; }
+  #touch.hidden{ display:none; }
+  #stick{
+    position:absolute; left:24px; bottom:28px; width:120px; height:120px;
+    border-radius:50%; background:rgba(255,255,255,.10);
+    border:2px solid rgba(255,255,255,.30); pointer-events:auto; touch-action:none;
+  }
+  #knob{
+    position:absolute; left:34px; top:34px; width:52px; height:52px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffe7a6, #f6b73c);
+    box-shadow:0 3px 8px #0007; transition:transform .03s;
+  }
+  #jumpBtn{
+    position:absolute; right:26px; bottom:40px; width:88px; height:88px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #bfe7ff, #4f9bd6);
+    border:2px solid rgba(255,255,255,.4); color:#08243a; font-size:34px; font-weight:bold;
+    pointer-events:auto; touch-action:none; box-shadow:0 5px 0 #2f6f9e, 0 8px 14px #0007;
+    cursor:pointer; user-select:none;
+  }
+  #jumpBtn:active{ transform:translateY(4px); box-shadow:0 1px 0 #2f6f9e; }
 </style>
 </head>
 <body>
@@ -85,6 +106,12 @@
 
   <div id="toast"></div>
   <button id="skipBtn" class="hidden">Pular ▶</button>
+
+  <!-- Roblox-style touch controls (free-roam phases) -->
+  <div id="touch" class="hidden">
+    <div id="stick"><div id="knob"></div></div>
+    <button id="jumpBtn">⤴</button>
+  </div>
 
   <!-- START -->
   <div class="screen" id="startScreen">
@@ -153,13 +180,13 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 // ---------- game state ----------
 const PHASES = [
   { tag:'Fase 1 · A Floresta', icon:'🌲', title:'Mel da Floresta',
-    text:'O urso corre pela floresta! Toque (ou Espaço) para PULAR: pegue 8 potes de mel 🍯, salte sobre as rochas 🪨 e desvie das abelhas 🐝. Segure → para correr mais rápido.' },
+    text:'Explore a floresta livremente e colete 8 potes de mel 🍯, fugindo das abelhas 🐝. Use o direcional/WASD para andar em qualquer direção e o botão ⤴ para pular. A câmera segue o urso!' },
   { tag:'Fase 2 · O Rio', icon:'🌊', title:'A Travessia',
     text:'Pule de pedra em pedra para atravessar o rio. Toque/seta para pular no tempo certo. Caia na água e acabou!' },
   { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória',
     text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.' },
   { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche',
-    text:'O urso sobe a montanha correndo! Toque (ou Espaço) para PULAR sobre as rochas 🪨 da avalanche e chegar ao cume para pegar o último pedaço.' },
+    text:'Escale a montanha até o cume! Use o direcional/WASD para subir e desviar das rochas 🪨 da avalanche, e o botão ⤴ para pular. A câmera sobe junto com o urso.' },
 ];
 const GEM_EMOJI = ['🔶','🔷','🟡','💎'];
 let pieces = 0;      // amulet pieces collected
@@ -174,6 +201,7 @@ function par(depth){ return { x:(mouse.x-W/2)/(W/2)*depth, y:(mouse.y-H/2)/(H/2)
 // ---------- input ----------
 addEventListener('keydown', e=>{ keys[e.key]=true;
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  if(e.key===' ') queueJump();
   if(game && game.key) game.key(e.key);
 });
 addEventListener('keyup', e=>{ keys[e.key]=false; });
@@ -189,9 +217,54 @@ cv.addEventListener('touchstart', e=>{ e.preventDefault(); const p=canvasPos(e);
 cv.addEventListener('touchmove', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.x=p.x; pointer.y=p.y; mouse.x=p.x; mouse.y=p.y; }, {passive:false});
 cv.addEventListener('touchend', e=>{ e.preventDefault(); pointer.down=false; }, {passive:false});
 
+// ---------- Roblox-style controls: virtual joystick + jump ----------
+let joy={x:0,y:0};            // analog stick vector (-1..1)
+let jumpQueued=false;
+function queueJump(){ jumpQueued=true; }
+function takeJump(){ if(jumpQueued){ jumpQueued=false; return true; } return false; }
+// combine keyboard (WASD/arrows) with the analog stick into one movement vector
+function readAxis(){
+  let x=0,y=0;
+  if(keys.ArrowLeft||keys.a||keys.A)  x-=1;
+  if(keys.ArrowRight||keys.d||keys.D) x+=1;
+  if(keys.ArrowUp||keys.w||keys.W)    y-=1;
+  if(keys.ArrowDown||keys.s||keys.S)  y+=1;
+  x+=joy.x; y+=joy.y;
+  const m=Math.hypot(x,y); if(m>1){ x/=m; y/=m; }
+  return {x,y};
+}
+// smooth follow camera, clamped to world bounds
+function makeCam(worldW,worldH){
+  return { x:0, y:0,
+    snap(tx,ty){ this.x=clamp(tx-W/2,0,Math.max(0,worldW-W)); this.y=clamp(ty-H/2,0,Math.max(0,worldH-H)); },
+    follow(tx,ty,ease){
+      const dx=clamp(tx-W/2,0,Math.max(0,worldW-W));
+      const dy=clamp(ty-H/2,0,Math.max(0,worldH-H));
+      this.x+=(dx-this.x)*(ease||0.12); this.y+=(dy-this.y)*(ease||0.12);
+    } };
+}
+// joystick wiring
+(function(){
+  const stickEl=$('stick'), knobEl=$('knob'); let active=false, cx=0, cy=0; const R=44;
+  function setFrom(e){ const p=e.touches?e.touches[0]:e; let dx=p.clientX-cx, dy=p.clientY-cy;
+    const m=Math.hypot(dx,dy); if(m>R){ dx*=R/m; dy*=R/m; }
+    knobEl.style.transform='translate('+dx+'px,'+dy+'px)'; joy.x=dx/R; joy.y=dy/R; }
+  function start(e){ const r=stickEl.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2; active=true; setFrom(e); }
+  function end(){ active=false; joy.x=0; joy.y=0; knobEl.style.transform='translate(0,0)'; }
+  stickEl.addEventListener('touchstart',e=>{ e.preventDefault(); start(e); },{passive:false});
+  stickEl.addEventListener('mousedown', e=>{ e.preventDefault(); start(e); });
+  addEventListener('touchmove',e=>{ if(active){ e.preventDefault(); setFrom(e); } },{passive:false});
+  addEventListener('mousemove', e=>{ if(active) setFrom(e); });
+  addEventListener('touchend', end); addEventListener('mouseup', end);
+  const jb=$('jumpBtn');
+  jb.addEventListener('touchstart',e=>{ e.preventDefault(); queueJump(); },{passive:false});
+  jb.addEventListener('mousedown', e=>{ e.preventDefault(); queueJump(); });
+})();
+
 // ---------- screen flow ----------
 function show(id){ ['startScreen','introScreen','winScreen','loseScreen','finalScreen']
-  .forEach(s=> $(s).classList.toggle('hidden', s!==id)); }
+  .forEach(s=> $(s).classList.toggle('hidden', s!==id));
+  $('touch').classList.add('hidden'); }     // hide joystick whenever a menu is up
 function hideScreens(){ ['startScreen','introScreen','winScreen','loseScreen','finalScreen']
   .forEach(s=> $(s).classList.add('hidden')); }
 
@@ -220,6 +293,8 @@ function intro(){
 }
 function beginPhase(){
   hideScreens();
+  // free-roam phases (Floresta & Montanha) get the Roblox-style joystick + jump
+  $('touch').classList.toggle('hidden', !(phase===0 || phase===3));
   game = makePhase(phase);
 }
 function losePhase(msg){
@@ -317,112 +392,89 @@ function drawBear(x,y,s=1,face=1,bob=0,run=null){
   ctx.restore();
 }
 
-// ---------- PHASE 1: FOREST (side-scrolling runner) ----------
+// ---------- PHASE 1: FOREST (Roblox-style free-roam meadow) ----------
 function phaseForest(){
-  const groundY = H-120;                       // y where the bear's feet rest
-  const bear = { x:130, y:groundY, vy:0, onGround:true, runT:0 };
-  const GRAV=0.8, JUMP=-15.5;
-  let worldX=0, baseSpeed=4.2, collected=0, need=8, t=0, lost=false;
-  // build the track: honey (low or high), rocks (jump over), bees (flying)
-  const items=[];
-  let wx=460;
-  for(let i=0;i<60;i++){
-    const roll=Math.random();
-    if(roll<0.55){ items.push({wx, y:groundY-30-(Math.random()<.45?95:0), type:'honey', got:false}); }
-    else if(roll<0.80){ items.push({wx, y:groundY, type:'rock', got:false}); }
-    else { items.push({wx, y:groundY-130, type:'bee', ph:Math.random()*6, got:false}); }
-    wx += 150 + Math.random()*130;
-  }
-  function jump(){ if(bear.onGround && !lost){ bear.vy=JUMP; bear.onGround=false; } }
-  function row(speed, spacing, size, col, baseY){
-    const off=(worldX*speed)%spacing;
-    for(let x=-spacing; x<W+spacing*2; x+=spacing){ tree(x-off, baseY, size, col); }
-  }
+  const WW=1600, WH=1300;                       // world bigger than the screen
+  const cam=makeCam(WW,WH);
+  const bear={ x:WW/2, y:WH/2, vx:0, vy:0, r:24, face:1, walk:0, hopY:0, hopV:0, onGround:true };
+  const SPEED=4.4, ACC=0.6, FRIC=0.80;
+  let collected=0, need=8, t=0, lost=false;
+  const honey=[]; for(let i=0;i<need+2;i++) honey.push({x:rand(90,WW-90), y:rand(90,WH-90), got:false});
+  const bees=[];  for(let i=0;i<5;i++) bees.push({x:rand(120,WW-120), y:rand(120,WH-120), vx:rand(-2.2,2.2), vy:rand(-2.2,2.2)});
+  const trees=[]; for(let i=0;i<46;i++) trees.push({x:rand(20,WW-20), y:rand(40,WH-20), s:rand(0.8,1.5)});
+  const flowers=[]; for(let i=0;i<60;i++) flowers.push({x:rand(0,WW), y:rand(0,WH), c:['#ffe06b','#ff9ad1','#fff','#c08bff'][i%4]});
+  cam.snap(bear.x,bear.y);
   return {
-    key(k){ if(k===' '||k==='ArrowUp') jump(); },
-    tap(){ jump(); },
     update(){
-      t++;
-      if(lost) return;
-      let sp=baseSpeed;
-      if(keys.ArrowRight) sp=baseSpeed*1.7;
-      if(keys.ArrowLeft)  sp=baseSpeed*0.55;
-      worldX += sp;
-      if(bear.onGround) bear.runT += sp*0.07;       // animate legs only while running
-      // physics
-      bear.vy += GRAV; bear.y += bear.vy;
-      if(bear.y>=groundY){ bear.y=groundY; bear.vy=0; bear.onGround=true; }
-      // interactions
-      for(const it of items){
-        if(it.got) continue;
-        const sx = bear.x + (it.wx - worldX);
-        if(sx < -60) { it.got=true; continue; }      // scrolled past, retire it
-        it.sx = sx;
-        const iy = it.type==='bee' ? it.y + Math.sin(t*0.05+it.ph)*22 : it.y;
-        it.iy = iy;
-        if(sx > bear.x-30 && sx < bear.x+28){
-          const dist = Math.hypot(sx-bear.x, iy-bear.y-(-6));
-          if(it.type==='honey' && dist<34){ it.got=true; collected++; toast('Mel! '+collected+'/'+need);
-            if(collected>=need){ winPhase(); return; } }
-          else if(it.type==='rock' && bear.y>groundY-30){ lost=true; losePhase('O urso tropeçou na rocha! 🪨 Pule sobre ela.'); return; }
-          else if(it.type==='bee' && dist<30){ lost=true; losePhase('Uma abelha picou o urso! 🐝'); return; }
-        }
-      }
+      t++; if(lost) return;
+      const ax=readAxis();
+      bear.vx+=ax.x*ACC; bear.vy+=ax.y*ACC; bear.vx*=FRIC; bear.vy*=FRIC;
+      const sp=Math.hypot(bear.vx,bear.vy); if(sp>SPEED){ bear.vx*=SPEED/sp; bear.vy*=SPEED/sp; }
+      bear.x=clamp(bear.x+bear.vx, bear.r, WW-bear.r);
+      bear.y=clamp(bear.y+bear.vy, bear.r, WH-bear.r);
+      if(Math.abs(bear.vx)>0.2) bear.face=bear.vx>0?1:-1;
+      const moving=Math.hypot(bear.vx,bear.vy);
+      bear.walk += moving*0.16;
+      if(takeJump() && bear.onGround){ bear.hopV=-7.5; bear.onGround=false; }
+      if(!bear.onGround){ bear.hopV+=0.55; bear.hopY+=bear.hopV; if(bear.hopY>=0){ bear.hopY=0; bear.onGround=true; } }
+      bear.moving=moving;
+      // honey pickup
+      honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-bear.x,h.y-bear.y)<bear.r+16){
+        h.got=true; collected++; toast('Mel! '+collected+'/'+need); if(collected>=need){ winPhase(); } }});
+      // bees roam and sting (safe while hopping in the air)
+      bees.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
+        if(b.x<50||b.x>WW-50) b.vx*=-1; if(b.y<50||b.y>WH-50) b.vy*=-1;
+        if(bear.onGround && Math.hypot(b.x-bear.x,b.y-bear.y)<bear.r+11){ lost=true; losePhase('Uma abelha picou o urso! 🐝'); }});
+      cam.follow(bear.x,bear.y,0.11);
     },
     draw(){
-      // sky gradient
-      const sky=ctx.createLinearGradient(0,0,0,H*0.8);
-      sky.addColorStop(0,'#e3f2c8'); sky.addColorStop(0.5,'#a7d98a'); sky.addColorStop(1,'#6cb259');
-      ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
-      // soft sun + slow rotating god rays
-      softSun(W*0.8,84,160,'rgba(255,251,205,.85)');
-      ctx.save(); ctx.globalAlpha=0.09; ctx.fillStyle='#fff7cf'; ctx.translate(W*0.8,84);
-      for(let i=0;i<7;i++){ ctx.rotate(0.9+t*0.0006); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(440,46); ctx.lineTo(440,-46); ctx.closePath(); ctx.fill(); }
-      ctx.restore();
-      ctx.fillStyle='rgba(255,253,228,.95)'; ctx.beginPath(); ctx.arc(W*0.8,84,30,0,7); ctx.fill();
-      // drifting clouds
-      for(let i=0;i<3;i++){ const cx=(((i*220 - worldX*0.06)%(W+260))+W+260)%(W+260)-130; cloud(cx, 64+i*30, 0.7+i*0.12, 0.8); }
-      // rolling hills behind the trees
-      hill(worldX,0.07,H*0.47,15,0.012,'#84c66c');
-      hill(worldX,0.14,H*0.55,22,0.016,'#65ac52');
-      // soft fog band for depth
-      ctx.fillStyle='rgba(225,242,214,.28)'; ctx.fillRect(0,H*0.50,W,76);
-      // parallax tree layers (far -> near)
-      row(0.18, 90,  46, '#3f8350', H*0.53);
-      row(0.40, 140, 82, '#2f6b3e', H*0.65);
-      row(0.72, 210, 134,'#1d472a', H*0.83);
-      // ground with gradient + grass edge
-      const gg=ctx.createLinearGradient(0,groundY+20,0,H);
-      gg.addColorStop(0,'#4f9249'); gg.addColorStop(1,'#2b5c2c');
-      ctx.fillStyle=gg; ctx.fillRect(0,groundY+24,W,H-groundY-24);
-      ctx.fillStyle='#74c065'; ctx.fillRect(0,groundY+24,W,5);
-      ctx.strokeStyle='#3a7a3a'; ctx.lineWidth=2;
-      const goff=worldX%22;
-      for(let x=-goff;x<W;x+=22){ ctx.beginPath(); ctx.moveTo(x,groundY+32); ctx.lineTo(x+2,groundY+22); ctx.stroke(); }
-      // items
-      for(const it of items){ if(it.got || it.sx===undefined) continue;
-        if(it.sx<-40||it.sx>W+40) continue;
-        if(it.type==='honey'){ softSun(it.sx,it.iy,24,'rgba(255,206,84,.55)'); emoji('🍯', it.sx, it.iy, 30); }
-        else if(it.type==='bee') emoji('🐝', it.sx, it.iy, 26);
-        else { // shaded rock
-          ctx.save(); ctx.translate(it.sx, groundY+14);
-          ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(0,0,18,0,7); ctx.fill();
-          ctx.fillStyle='#6b5c45'; ctx.beginPath(); ctx.arc(6,5,11,0,7); ctx.fill();
-          ctx.fillStyle='#a89478'; ctx.beginPath(); ctx.arc(-6,-6,6,0,7); ctx.fill();
-          ctx.restore();
+      const ox=-cam.x, oy=-cam.y;
+      // grass base
+      const gg=ctx.createLinearGradient(0,0,0,H); gg.addColorStop(0,'#5fb152'); gg.addColorStop(1,'#3f8c3f');
+      ctx.fillStyle=gg; ctx.fillRect(0,0,W,H);
+      // ground texture tufts (tiled to camera)
+      ctx.fillStyle='rgba(46,120,52,.5)';
+      const sx=((cam.x%44)+44)%44, sy=((cam.y%44)+44)%44;
+      for(let x=-sx;x<W;x+=44) for(let y=-sy;y<H;y+=44){ ctx.fillRect(x+6,y+10,4,9); ctx.fillRect(x+24,y+26,4,9); }
+      // flowers
+      flowers.forEach(f=>{ const fx=f.x+ox, fy=f.y+oy; if(fx<-10||fx>W+10||fy<-10||fy>H+10) return;
+        ctx.fillStyle=f.c; ctx.beginPath(); ctx.arc(fx,fy,3,0,7); ctx.fill();
+        ctx.fillStyle='#ffd84a'; ctx.beginPath(); ctx.arc(fx,fy,1.3,0,7); ctx.fill(); });
+      // world border (forest edge) — darker beyond bounds
+      ctx.fillStyle='#244e26';
+      if(ox>0) ctx.fillRect(0,0,ox,H);
+      if(oy>0) ctx.fillRect(0,0,W,oy);
+      if(WW+ox<W) ctx.fillRect(WW+ox,0,W-(WW+ox),H);
+      if(WH+oy<H) ctx.fillRect(0,WH+oy,W,H-(WH+oy));
+      // collect drawables (trees + honey + bees + bear) and sort by world-y for depth
+      const drfrom=[];
+      trees.forEach(tr=> drfrom.push({y:tr.y, kind:'tree', o:tr}));
+      honey.forEach(h=>{ if(!h.got) drfrom.push({y:h.y, kind:'honey', o:h}); });
+      bees.forEach(b=> drfrom.push({y:b.y, kind:'bee', o:b}));
+      drfrom.push({y:bear.y, kind:'bear'});
+      drfrom.sort((a,b)=>a.y-b.y);
+      for(const d of drfrom){
+        if(d.kind==='tree'){ const x=d.o.x+ox, y=d.o.y+oy; if(x<-80||x>W+80||y<-200||y>H+60) continue;
+          ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y,26*d.o.s,8*d.o.s,0,0,7); ctx.fill();
+          tree(x,y,150*d.o.s,'#27582f');
+        } else if(d.kind==='honey'){ const x=d.o.x+ox, y=d.o.y+oy;
+          softSun(x,y,26,'rgba(255,206,84,.6)'); emoji('🍯',x,y,30);
+        } else if(d.kind==='bee'){ const x=d.o.x+ox, y=d.o.y+oy; emoji('🐝',x,y,24);
+        } else { // bear
+          const x=bear.x+ox, y=bear.y+oy;
+          ctx.fillStyle='rgba(0,0,0,.20)'; ctx.beginPath(); ctx.ellipse(x,y+16,18,6,0,0,7); ctx.fill();
+          const pose = !bear.onGround ? 'jump' : (bear.moving>0.5 ? bear.walk : null);
+          drawBear(x, y-12+bear.hopY, 1, bear.face, 0, pose);
         }
       }
-      // floating pollen motes
+      // floating pollen
       ctx.fillStyle='#fff7c8';
-      for(let i=0;i<18;i++){ const px=(((i*73 - worldX*0.3 + t*0.4)%W)+W)%W;
-        const py=120 + (i*41)%(groundY-100) + Math.sin(t*0.03+i)*10;
-        ctx.globalAlpha=0.35+0.35*Math.sin(t*0.05+i); ctx.fillRect(px,py,2.5,2.5); }
+      for(let i=0;i<16;i++){ const px=(((i*97 - cam.x*0.5 + t*0.4)%W)+W)%W; const py=(((i*61 - cam.y*0.5)%H)+H)%H;
+        ctx.globalAlpha=0.3+0.3*Math.sin(t*0.05+i); ctx.fillRect(px,py,2.5,2.5); }
       ctx.globalAlpha=1;
-      // bear
-      drawBear(bear.x, bear.y-24, 1, 1, 0, bear.onGround? bear.runT : 'jump');
       vignette(0.34);
       banner('Mel: '+collected+'/'+need);
-      hint('Toque/Espaço = PULAR  ·  → corre mais rápido');
+      hint('Direcional/WASD para andar  ·  botão ⤴ para pular');
     }
   };
 }
@@ -684,111 +736,100 @@ function phaseCave(){
   };
 }
 
-// ---------- PHASE 4: MOUNTAIN (side-scrolling climb, jump the rocks) ----------
+// ---------- PHASE 4: MOUNTAIN (Roblox-style free climb to the summit) ----------
 function phaseMountain(){
-  const groundY = H-110;
-  const bear = { x:130, y:groundY, vy:0, onGround:true, runT:0 };
-  const GRAV=0.8, JUMP=-15.5;
-  let worldX=0, speed=4.7, t=0, lost=false;
-  const goal=4400;                              // distance to the summit
-  // rolling boulders along the trail (jump over them)
-  const rocks=[]; let wx=560;
-  for(let i=0;i<40;i++){ rocks.push({wx, r:rand(15,22), got:false}); wx += rand(180,300); }
-  function jump(){ if(bear.onGround && !lost){ bear.vy=JUMP; bear.onGround=false; } }
-  function ridge(speed, color, ay, by){        // scrolling mountain ridge layer
-    const span=520, off=(worldX*speed)%span;
-    ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(-off-span,H);
-    for(let x=-off-span; x<W+span; x+=span){
-      ctx.lineTo(x+span*0.5, ay); ctx.lineTo(x+span, by);
-    }
-    ctx.lineTo(W+span,H); ctx.closePath(); ctx.fill();
-  }
+  const WW=W, WH=2800;                          // tall world: climb upward
+  const cam=makeCam(WW,WH);
+  const bear={ x:W/2, y:WH-90, vx:0, vy:0, r:22, face:1, walk:0, hopY:0, hopV:0, onGround:true };
+  const SPEED=4.4, ACC=0.6, FRIC=0.82;
+  const summitY=120;                            // reach the top to win
+  let t=0, lost=false; const rocks=[];
+  // decorative props fixed in the world
+  const props=[]; for(let i=0;i<26;i++) props.push({x:rand(30,W-30), y:rand(160,WH-120), r:rand(8,16)});
+  cam.snap(bear.x,bear.y);
+  function spawnRock(){ rocks.push({x:rand(30,W-30), y:cam.y-30, r:rand(14,22), v:rand(2.8,4.6), rot:0}); }
   return {
-    key(k){ if(k===' '||k==='ArrowUp') jump(); },
-    tap(){ jump(); },
     update(){
-      t++;
-      if(lost) return;
-      let sp=speed;
-      if(keys.ArrowRight) sp=speed*1.6;
-      if(keys.ArrowLeft)  sp=speed*0.6;
-      worldX += sp;
-      if(bear.onGround) bear.runT += sp*0.07;
-      bear.vy += GRAV; bear.y += bear.vy;
-      if(bear.y>=groundY){ bear.y=groundY; bear.vy=0; bear.onGround=true; }
-      for(const r of rocks){
-        if(r.got) continue;
-        const sx = bear.x + (r.wx - worldX);
-        if(sx < -60){ r.got=true; continue; }
-        r.sx=sx;
-        if(sx>bear.x-26 && sx<bear.x+24 && bear.y>groundY-30){
-          lost=true; losePhase('Uma rocha atingiu o urso! 🪨 Pule sobre ela.'); return;
-        }
+      t++; if(lost) return;
+      const ax=readAxis();
+      bear.vx+=ax.x*ACC; bear.vy+=ax.y*ACC; bear.vx*=FRIC; bear.vy*=FRIC;
+      const sp=Math.hypot(bear.vx,bear.vy); if(sp>SPEED){ bear.vx*=SPEED/sp; bear.vy*=SPEED/sp; }
+      bear.x=clamp(bear.x+bear.vx, bear.r, W-bear.r);
+      bear.y=clamp(bear.y+bear.vy, bear.r, WH-bear.r);
+      if(Math.abs(bear.vx)>0.2) bear.face=bear.vx>0?1:-1;
+      bear.moving=Math.hypot(bear.vx,bear.vy); bear.walk+=bear.moving*0.16;
+      if(takeJump() && bear.onGround){ bear.hopV=-7.5; bear.onGround=false; }
+      if(!bear.onGround){ bear.hopV+=0.55; bear.hopY+=bear.hopV; if(bear.hopY>=0){ bear.hopY=0; bear.onGround=true; } }
+      // avalanche: rocks tumble down from the top of the view
+      if(t%24===0) spawnRock();
+      for(let i=rocks.length-1;i>=0;i--){ const r=rocks[i]; r.y+=r.v; r.rot+=0.06;
+        if(bear.onGround && Math.hypot(r.x-bear.x,r.y-bear.y)<bear.r+r.r-6){ lost=true; losePhase('Uma rocha atingiu o urso! 🪨'); return; }
+        if(r.y>cam.y+H+60) rocks.splice(i,1);
       }
-      if(worldX>=goal){ winPhase(); return; }
+      if(bear.y<=summitY){ winPhase(); return; }
+      cam.follow(bear.x,bear.y,0.10);
     },
     draw(){
-      // night sky
+      const oy=-cam.y;
+      // night sky (fixed)
       const g=ctx.createLinearGradient(0,0,0,H);
-      g.addColorStop(0,'#1b2750'); g.addColorStop(0.5,'#4a3f6b'); g.addColorStop(1,'#1e1628');
+      g.addColorStop(0,'#16204a'); g.addColorStop(0.5,'#3f375f'); g.addColorStop(1,'#241a32');
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      // aurora ribbons
-      ctx.save();
-      for(let a=0;a<2;a++){ ctx.globalAlpha=0.12;
-        const col=a?'#7af0c0':'#9a7af0'; ctx.strokeStyle=col; ctx.lineWidth=26;
-        ctx.beginPath();
-        for(let x=-10;x<=W+10;x+=20){ const y=120+a*40 + Math.sin(x*0.012 + t*0.01 + a)*30; x===-10?ctx.moveTo(x,y):ctx.lineTo(x,y); }
-        ctx.stroke();
-      }
+      // aurora
+      ctx.save(); for(let a=0;a<2;a++){ ctx.globalAlpha=0.12; ctx.strokeStyle=a?'#7af0c0':'#9a7af0'; ctx.lineWidth=26;
+        ctx.beginPath(); for(let x=-10;x<=W+10;x+=20){ const y=90+a*40+Math.sin(x*0.012+t*0.01+a)*28; x===-10?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke(); }
       ctx.restore();
-      // moon with glow
-      softSun(W*0.22,96,90,'rgba(230,238,255,.6)');
-      ctx.fillStyle='#eef2ff'; ctx.beginPath(); ctx.arc(W*0.22,96,30,0,7); ctx.fill();
-      ctx.fillStyle='rgba(180,190,220,.5)';
-      ctx.beginPath(); ctx.arc(W*0.22-8,90,7,0,7); ctx.arc(W*0.22+10,104,5,0,7); ctx.fill();
-      // stars
+      // moon + stars (slowly react to climb height)
+      softSun(W*0.78,80,90,'rgba(230,238,255,.55)');
+      ctx.fillStyle='#eef2ff'; ctx.beginPath(); ctx.arc(W*0.78,80,28,0,7); ctx.fill();
       ctx.fillStyle='rgba(255,255,255,.75)';
-      const soff=(worldX*0.05)%W;
-      for(let i=0;i<30;i++){ let sx=((i*97+31)-soff)%W; if(sx<0)sx+=W;
-        const tw=0.5+0.5*Math.sin(t*0.05+i); ctx.globalAlpha=0.4+tw*0.5; ctx.fillRect(sx,(i*53+17)%240,2,2); }
+      for(let i=0;i<30;i++){ const tw=0.4+0.6*Math.sin(t*0.05+i); ctx.globalAlpha=tw;
+        ctx.fillRect((i*97+31)%W, ((i*53+17)%240), 2,2); }
       ctx.globalAlpha=1;
-      // parallax ridges with haze between them
-      ridge(0.12, '#3a3a5e', H*0.42, H*0.60);
-      ctx.fillStyle='rgba(120,130,170,.12)'; ctx.fillRect(0,H*0.50,W,60);
-      ridge(0.28, '#2c2745', H*0.55, H*0.74);
-      ctx.fillStyle='rgba(90,90,130,.12)'; ctx.fillRect(0,H*0.66,W,60);
-      ridge(0.50, '#211b34', H*0.70, H*0.86);
-      // snowy trail ground
-      const gnd=ctx.createLinearGradient(0,groundY+20,0,H);
-      gnd.addColorStop(0,'#454063'); gnd.addColorStop(1,'#211a32');
-      ctx.fillStyle=gnd; ctx.fillRect(0,groundY+24,W,H-groundY-24);
-      ctx.fillStyle='#e2e6fb'; ctx.fillRect(0,groundY+24,W,6);
-      const goff=(worldX)%30;
-      ctx.fillStyle='#9aa0c4';
-      for(let x=-goff; x<W; x+=30){ ctx.fillRect(x,groundY+34,4,3); }
-      // falling snow
-      ctx.fillStyle='rgba(255,255,255,.85)';
-      for(let i=0;i<40;i++){ const sx=(((i*61 - worldX*0.2)%W)+W)%W + Math.sin(t*0.03+i)*8;
-        const sy=((i*53 + t*1.6)%(groundY+24)); ctx.beginPath(); ctx.arc(sx,sy,1.6,0,7); ctx.fill(); }
-      // rolling boulders
-      for(const r of rocks){ if(r.got||r.sx===undefined) continue;
-        if(r.sx<-40||r.sx>W+40) continue;
-        ctx.save(); ctx.translate(r.sx, groundY+14); ctx.rotate(-worldX*0.03);
+      // snowy slope (the climbable world), scrolls with camera
+      const top=summitY-60+oy, bot=WH+oy;
+      const gnd=ctx.createLinearGradient(0,Math.max(0,top),0,H);
+      gnd.addColorStop(0,'#cfd6f2'); gnd.addColorStop(0.5,'#8e8fc0'); gnd.addColorStop(1,'#3a3354');
+      ctx.fillStyle=gnd; ctx.fillRect(0, top, W, bot-top);
+      // rocky side walls
+      ctx.fillStyle='#2a2440'; ctx.fillRect(0, top, 16, bot-top); ctx.fillRect(W-16, top, 16, bot-top);
+      // distance markers up the slope + snow specks
+      ctx.fillStyle='rgba(255,255,255,.5)';
+      props.forEach(p=>{ const y=p.y+oy; if(y<-20||y>H+20) return;
+        ctx.beginPath(); ctx.arc(p.x,y,p.r*0.5,0,7); ctx.fill(); });
+      // summit platform with the amulet piece glow
+      const sy=summitY+oy;
+      if(sy<H+40){
+        ctx.fillStyle='#eef2ff'; rrect(W/2-70, sy-6, 140, 20, 8); ctx.fill();
+        softSun(W/2, sy-26, 60, 'rgba(255,206,84,.7)'); emoji('🏔️', W/2, sy-30, 30);
+        ctx.fillStyle='#ffce54'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='center';
+        ctx.fillText('CUME', W/2, sy+8);
+      }
+      // falling avalanche rocks
+      for(const r of rocks){ const y=r.y+oy; if(y<-40||y>H+40) continue;
+        ctx.save(); ctx.translate(r.x,y); ctx.rotate(r.rot);
         ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
         ctx.fillStyle='#6b5c45'; ctx.beginPath(); ctx.arc(r.r*0.3,r.r*0.3,r.r*0.55,0,7); ctx.fill();
-        ctx.fillStyle='#a89478'; ctx.beginPath(); ctx.arc(-r.r*0.3,-r.r*0.3,r.r*0.3,0,7); ctx.fill();
-        ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.5,r.r*0.4,0,7); ctx.fill(); // snow on top
+        ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.5,r.r*0.4,0,7); ctx.fill();
         ctx.restore();
       }
+      // falling snow (screen-space)
+      ctx.fillStyle='rgba(255,255,255,.85)';
+      for(let i=0;i<46;i++){ const fx=((i*61)%W)+Math.sin(t*0.03+i)*8; const fy=((i*53 + t*1.8)%H);
+        ctx.beginPath(); ctx.arc(fx,fy,1.6,0,7); ctx.fill(); }
       // bear
-      drawBear(bear.x, bear.y-24, 1, 1, 0, bear.onGround? bear.runT : 'jump');
+      const bx=bear.x, by=bear.y+oy;
+      ctx.fillStyle='rgba(0,0,0,.20)'; ctx.beginPath(); ctx.ellipse(bx,by+16,16,5,0,0,7); ctx.fill();
+      const pose = !bear.onGround ? 'jump' : (bear.moving>0.5 ? bear.walk : null);
+      drawBear(bx, by-12+bear.hopY, 1, bear.face, 0, pose);
       vignette(0.42);
-      // climb progress bar
-      const pct = clamp(worldX/goal,0,1);
+      // climb progress
+      const pct = clamp((WH-90-bear.y)/(WH-90-summitY),0,1);
       ctx.fillStyle='rgba(0,0,0,.3)'; rrect(40,H-30,W-80,12,6); ctx.fill();
       ctx.fillStyle='#ffce54'; rrect(40,H-30,(W-80)*pct,12,6); ctx.fill();
       emoji('⛰️', W-30, H-24, 22);
       banner('Subida: '+Math.round(pct*100)+'%');
+      hint('Direcional/WASD para escalar  ·  ⤴ para pular');
     }
   };
 }
