@@ -91,15 +91,23 @@
   }
   #jumpBtn:active{ transform:translateY(4px); box-shadow:0 1px 0 #2f6f9e; }
   /* character select */
-  #charGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; width:100%; max-width:340px; }
+  #charScreen{ justify-content:flex-start; overflow-y:auto; gap:10px; padding-top:22px; padding-bottom:22px; }
+  #charGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; width:100%; max-width:340px; }
+  #outfitGrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; width:100%; max-width:340px; }
+  .wardrobe-label{ font-size:15px; font-weight:bold; color:var(--gold); margin-top:4px; }
   .charCard{
     pointer-events:auto; cursor:pointer; background:rgba(255,255,255,.08);
-    border:2px solid rgba(255,255,255,.18); border-radius:14px; padding:10px 4px;
-    display:flex; flex-direction:column; align-items:center; gap:4px; transition:.15s;
+    border:2px solid rgba(255,255,255,.18); border-radius:14px; padding:8px 4px;
+    display:flex; flex-direction:column; align-items:center; gap:3px; transition:.15s;
   }
-  .charCard .ce{ font-size:40px; filter:drop-shadow(0 3px 4px #0008); }
-  .charCard .cn{ font-size:13px; font-weight:bold; }
+  .charCard .ce{ font-size:34px; filter:drop-shadow(0 3px 4px #0008); }
+  .charCard .cn{ font-size:12px; font-weight:bold; }
   .charCard.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); transform:translateY(-3px); }
+  .outCard{ pointer-events:auto; cursor:pointer; background:rgba(255,255,255,.08);
+    border:2px solid rgba(255,255,255,.18); border-radius:12px; padding:6px 2px;
+    display:flex; flex-direction:column; align-items:center; gap:2px; transition:.15s; }
+  .outCard .ce{ font-size:24px; } .outCard .cn{ font-size:10px; }
+  .outCard.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); }
 </style>
 </head>
 <body>
@@ -131,10 +139,12 @@
     <p class="small">Escolha seu herói, assista à história e parta na aventura.<br>Toque / clique ou use as setas e a barra de espaço.</p>
   </div>
 
-  <!-- CHARACTER SELECT -->
+  <!-- CHARACTER SELECT + WARDROBE -->
   <div class="screen hidden" id="charScreen">
     <h2>Escolha seu herói</h2>
     <div id="charGrid"></div>
+    <div class="wardrobe-label">👕 Guarda-roupa</div>
+    <div id="outfitGrid"></div>
     <button class="btn" id="charBtn">Confirmar</button>
   </div>
 
@@ -204,7 +214,7 @@ const PHASES = [
     text:'Pule de pedra em pedra para atravessar o rio. Toque/seta para pular no tempo certo. Caia na água e acabou!',
     build:()=>phaseRiver() },
   { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória', roam:false,
-    text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.',
+    text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 3 rodadas para vencer.',
     build:()=>phaseCave() },
   { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche', roam:true,
     text:'Escale a montanha até o cume! Use o direcional/WASD para subir e desviar das rochas 🪨 da avalanche, e o botão ⤴ para pular.',
@@ -235,8 +245,44 @@ const CHARS=[
   {name:'Raposa',  emoji:'🦊', fur:'#e8743c', fdark:'#bb5022', flight:'#ff9a5a', belly:'#fff1e4', bellyD:'#f0d4bd', muzzle:'#fff1e4', out:'#5a2c12', nose:'#3a2418', ear:'pointy', earIn:'#3a2418'},
   {name:'Gato',    emoji:'🐱', fur:'#9aa0aa', fdark:'#6f757f', flight:'#b8bdc6', belly:'#e9ecf1', bellyD:'#cfd4dc', muzzle:'#e9ecf1', out:'#3b3f47', nose:'#e07b95', ear:'pointy', earIn:'#ffb3c6'},
   {name:'Pinguim', emoji:'🐧', fur:'#2b3340', fdark:'#1b212b', flight:'#3b4451', belly:'#f5f6fb', bellyD:'#dfe3ee', muzzle:'#2b3340', out:'#10141b', nose:'#ffae3a', ear:'none', beak:'#ffae3a', bigBelly:true},
+  {name:'Cachorro',emoji:'🐶', fur:'#cba978', fdark:'#a07c4c', flight:'#e2caa0', belly:'#f4e8cf', bellyD:'#dcc7a2', muzzle:'#f4e8cf', out:'#5b4226', nose:'#3a2a18', ear:'long', earIn:'#9c7a50'},
+  {name:'Porquinho',emoji:'🐷', fur:'#f7b6c8', fdark:'#e58aa6', flight:'#ffd1dd', belly:'#ffe3ea', bellyD:'#f3c0cf', muzzle:'#ffd1dd', out:'#b86a82', nose:'#e07b95', ear:'pointy', earIn:'#ef9ab1'},
+  {name:'Sapo',    emoji:'🐸', fur:'#7fc24a', fdark:'#5a9a32', flight:'#9bd86a', belly:'#e7f3c0', bellyD:'#cfe39a', muzzle:'#cfe9a0', out:'#3d6e22', nose:'#3d6e22', ear:'none'},
 ];
 let charSel=0;
+// ----- wardrobe: outfits/accessories drawn on top of the hero (local coords) -----
+const OUTFITS=[
+  {name:'Nenhuma', emoji:'🚫', draw:null},
+  {name:'Coroa', emoji:'👑', draw:(face)=>{ ctx.fillStyle='#ffd34d'; ctx.strokeStyle='#c99a1e'; ctx.lineWidth=1.5; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(-11,-32); ctx.lineTo(-11,-39); ctx.lineTo(-6,-35); ctx.lineTo(0,-42); ctx.lineTo(6,-35); ctx.lineTo(11,-39); ctx.lineTo(11,-32); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ff5b6b'; ctx.beginPath(); ctx.arc(0,-35,1.7,0,7); ctx.fill(); } },
+  {name:'Mago', emoji:'🧙', draw:(face)=>{ ctx.fillStyle='#6a4bd0'; ctx.strokeStyle='#46289c'; ctx.lineWidth=1.5; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(-13,-31); ctx.lineTo(13,-31); ctx.lineTo(3,-60); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0,-31,15,4.5,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ffd34d'; for(let k=0;k<5;k++){ const a=-Math.PI/2+k*2*Math.PI/5; const r=k%2?1.2:3; }
+    ctx.beginPath(); for(let k=0;k<10;k++){ const a=-Math.PI/2+k*Math.PI/5, r=k%2?1.4:3.4; const px=1+Math.cos(a)*r, py=-46+Math.sin(a)*r; k===0?ctx.moveTo(px,py):ctx.lineTo(px,py);} ctx.closePath(); ctx.fill(); } },
+  {name:'Boné', emoji:'🧢', draw:(face)=>{ ctx.fillStyle='#ff5b5b'; ctx.strokeStyle='#c23a3a'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,-32,12,Math.PI,0); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(face*11,-32,10,3.4,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-38,1.8,0,7); ctx.fill(); } },
+  {name:'Laço', emoji:'🎀', draw:(face)=>{ ctx.fillStyle='#ff7eb0'; ctx.strokeStyle='#d65a8c'; ctx.lineWidth=1.4; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(0,-34); ctx.lineTo(-10,-39); ctx.lineTo(-10,-29); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-34); ctx.lineTo(10,-39); ctx.lineTo(10,-29); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ffd0e2'; ctx.beginPath(); ctx.arc(0,-34,2.6,0,7); ctx.fill(); } },
+  {name:'Cartola', emoji:'🎩', draw:(face)=>{ ctx.fillStyle='#2b2b33'; ctx.strokeStyle='#000'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.ellipse(0,-32,15,4.5,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillRect(-9.5,-50,19,18);
+    ctx.fillStyle='#d6435a'; ctx.fillRect(-9.5,-37,19,4); } },
+  {name:'Óculos', emoji:'🕶️', draw:(face)=>{ ctx.fillStyle='#15151c';
+    ctx.beginPath(); ctx.ellipse(-6.5,-20.5,4.6,3.8,0,0,7); ctx.ellipse(6.5,-20.5,4.6,3.8,0,0,7); ctx.fill();
+    ctx.fillRect(-3,-21.5,6,1.8);
+    ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(-7.5,-22,1,0,7); ctx.arc(5.5,-22,1,0,7); ctx.fill(); } },
+  {name:'Cachecol', emoji:'🧣', draw:(face)=>{ ctx.fillStyle='#e04b5a'; ctx.strokeStyle='#b23644'; ctx.lineWidth=1.2; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.ellipse(0,-2,12,4.2,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillRect(face*6-2.5,-2,5,13); ctx.strokeRect(face*6-2.5,-2,5,13);
+    ctx.fillStyle='#fff'; for(let k=0;k<3;k++) ctx.fillRect(face*6-2.5, 8-k*4, 5,1.4); } },
+];
+let outfitSel=0;
 let pieces = 0;      // amulet pieces collected
 let phase = 0;       // current phase index
 let game = null;     // active phase object {update, draw, input}
@@ -321,12 +367,17 @@ function updateAmulet(){
   document.querySelectorAll('#amulet .gem').forEach((g,i)=> g.classList.toggle('on', i<pieces));
 }
 
-// ----- character select screen -----
+// ----- character select + wardrobe screen -----
 (function(){ const grid=$('charGrid');
   CHARS.forEach((c,i)=>{ const card=document.createElement('div'); card.className='charCard'+(i===0?' sel':'');
     card.innerHTML='<div class="ce">'+c.emoji+'</div><div class="cn">'+c.name+'</div>';
     card.onclick=()=>{ charSel=i; document.querySelectorAll('.charCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
     grid.appendChild(card); });
+  const og=$('outfitGrid');
+  OUTFITS.forEach((o,i)=>{ const card=document.createElement('div'); card.className='outCard'+(i===0?' sel':'');
+    card.innerHTML='<div class="ce">'+o.emoji+'</div><div class="cn">'+o.name+'</div>';
+    card.onclick=()=>{ outfitSel=i; document.querySelectorAll('.outCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
+    og.appendChild(card); });
 })();
 function openCharSelect(){ show('charScreen'); }
 
@@ -442,23 +493,24 @@ function drawChar(def,x,y,s=1,face=1,bob=0,run=null){
   ctx.fillStyle=furGrad(2,26,def.belly,def.bellyD);
   ctx.beginPath(); ctx.ellipse(0, def.bigBelly?12:14, def.bigBelly?12:9.5, def.bigBelly?16:12,0,0,7); ctx.fill();
   ctx.fillStyle='rgba(255,255,255,.10)'; ctx.beginPath(); ctx.ellipse(-2,9,5,7,0,0,7); ctx.fill();
-  // head
-  ctx.fillStyle=furGrad(-33,-3,FUR_L,FUR_D); ctx.strokeStyle=OUT; ctx.lineWidth=2.6;
-  fluffy(0,-18,15.5,15,0,38,0.010); ctx.fill(); ctx.stroke();
+  // head (bigger = cuter / chibi)
+  ctx.fillStyle=furGrad(-35,-3,FUR_L,FUR_D); ctx.strokeStyle=OUT; ctx.lineWidth=2.6;
+  fluffy(0,-19,17.6,16.6,0,38,0.010); ctx.fill(); ctx.stroke();
   ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2.2;
-  ctx.beginPath(); ctx.arc(0,-18,14, Math.PI*1.15, Math.PI*1.78); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,-19,16, Math.PI*1.15, Math.PI*1.78); ctx.stroke();
   // panda-style eye patches
   if(def.patch){ ctx.fillStyle=def.patch;
-    ctx.beginPath(); ctx.ellipse(-6*face,-20,4.5,5.5,0.3*face,0,7); ctx.ellipse(6*face,-20,4.5,5.5,-0.3*face,0,7); ctx.fill(); }
+    ctx.beginPath(); ctx.ellipse(-6.5*face,-20.5,5,6,0.3*face,0,7); ctx.ellipse(6.5*face,-20.5,5,6,-0.3*face,0,7); ctx.fill(); }
   // muzzle / face mask
   ctx.fillStyle=def.muzzle; ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1.2;
-  ctx.beginPath(); ctx.ellipse(0,-11,8.5,7,0,0,7); ctx.fill(); if(!def.patch) ctx.stroke();
-  // eyes
-  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(-6*face,-20,3,3.4,0,0,7); ctx.ellipse(6*face,-20,3,3.4,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,-11,9,7.5,0,0,7); ctx.fill(); if(!def.patch) ctx.stroke();
+  // big cute eyes
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(-6.5*face,-20.5,3.6,4.2,0,0,7); ctx.ellipse(6.5*face,-20.5,3.6,4.2,0,0,7); ctx.fill();
   ctx.fillStyle='#1c0f04';
-  ctx.beginPath(); ctx.arc(-6*face+face*0.6,-19.6,2,0,7); ctx.arc(6*face+face*0.6,-19.6,2,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-6.5*face+face*0.5,-20,2.5,0,7); ctx.arc(6.5*face+face*0.5,-20,2.5,0,7); ctx.fill();
   ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.arc(-6*face+1,-20.6,0.8,0,7); ctx.arc(6*face+1,-20.6,0.8,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-6.5*face+1.1,-21,1.1,0,7); ctx.arc(6.5*face+1.1,-21,1.1,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-6.5*face-0.8,-19,0.5,0,7); ctx.arc(6.5*face-0.8,-19,0.5,0,7); ctx.fill();
   // nose or beak
   if(def.beak){ ctx.fillStyle=def.beak; ctx.strokeStyle='rgba(120,70,0,.5)'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(-4,-13); ctx.lineTo(4,-13); ctx.lineTo(0,-8); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -469,6 +521,11 @@ function drawChar(def,x,y,s=1,face=1,bob=0,run=null){
     ctx.moveTo(0,-11.5); ctx.quadraticCurveTo(-2.6,-8.5,-4.6,-9.6); ctx.moveTo(0,-11.5);
     ctx.quadraticCurveTo(2.6,-8.5,4.6,-9.6); ctx.stroke();
   }
+  // rosy cheeks
+  ctx.fillStyle='rgba(255,135,150,.5)';
+  ctx.beginPath(); ctx.ellipse(-11,-13.5,3.4,2.3,0,0,7); ctx.ellipse(11,-13.5,3.4,2.3,0,0,7); ctx.fill();
+  // outfit / accessory on top
+  if(typeof OUTFITS!=='undefined' && OUTFITS[outfitSel] && OUTFITS[outfitSel].draw) OUTFITS[outfitSel].draw(face);
   ctx.restore();
 }
 // draw the currently-selected hero
@@ -509,9 +566,9 @@ function phaseCollect(cfg){
   return {
     update(){ t++; if(lost) return;
       roamStep(A,WW,WH,cfg.slippery);
-      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+16){ h.got=true; collected++; toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
+      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+26){ h.got=true; collected++; toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
       haz.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; if(b.x<50||b.x>WW-50)b.vx*=-1; if(b.y<50||b.y>WH-50)b.vy*=-1;
-        if(A.onGround && Math.hypot(b.x-A.x,b.y-A.y)<A.r+12){ lost=true; losePhase(cfg.loseMsg); }});
+        if(A.onGround && Math.hypot(b.x-A.x,b.y-A.y)<A.r+6){ lost=true; losePhase(cfg.loseMsg); }});
       cam.follow(A.x,A.y,0.11);
     },
     draw(){ const ox=-cam.x, oy=-cam.y;
@@ -521,15 +578,14 @@ function phaseCollect(cfg){
       deco.forEach(d=> list.push({y:d.y,k:'d',o:d}));
       items.forEach(h=>{ if(!h.got) list.push({y:h.y,k:'i',o:h}); });
       haz.forEach(b=> list.push({y:b.y,k:'h',o:b}));
-      list.push({y:A.y,k:'c'});
       list.sort((a,b)=>a.y-b.y);
       for(const d of list){
         if(d.k==='d'){ if(cfg.drawDeco) cfg.drawDeco(d.o, d.o.x+ox, d.o.y+oy, t); }
         else if(d.k==='i'){ const x=d.o.x+ox, y=d.o.y+oy+Math.sin(t*0.05+d.o.ph)*3;
           softSun(x,y,24,cfg.glow); emoji(cfg.itemEmoji,x,y,30); }
         else if(d.k==='h'){ const x=d.o.x+ox, y=d.o.y+oy+Math.sin(t*0.06+d.o.ph)*4; emoji(cfg.hazEmoji,x,y,28); }
-        else drawRoamer(A,ox,oy);
       }
+      drawRoamer(A,ox,oy);   // hero always on top (kid-friendly visibility)
       // edge fade beyond the world
       ctx.fillStyle=cfg.edge||'rgba(0,0,0,.35)';
       if(ox>0)ctx.fillRect(0,0,ox,H); if(oy>0)ctx.fillRect(0,0,W,oy);
@@ -549,13 +605,13 @@ function phaseClimb(cfg){
   let t=0, lost=false; const rocks=[];
   const props=cfg.props? cfg.props(WH):[];
   cam.snap(A.x,A.y);
-  function spawnRock(){ rocks.push({x:rand(30,W-30),y:cam.y-30,r:rand(14,22),v:rand(cfg.rmin||2.8,cfg.rmax||4.6),rot:0}); }
+  function spawnRock(){ rocks.push({x:rand(30,W-30),y:cam.y-30,r:rand(12,18),v:rand(cfg.rmin||2.2,cfg.rmax||3.4),rot:0}); }
   return {
     update(){ t++; if(lost) return;
       roamStep(A,WW,WH);
-      if(t%(cfg.every||24)===0) spawnRock();
+      if(t%(cfg.every||34)===0) spawnRock();
       for(let i=rocks.length-1;i>=0;i--){ const r=rocks[i]; r.y+=r.v; r.rot+=0.06;
-        if(A.onGround && Math.hypot(r.x-A.x,r.y-A.y)<A.r+r.r-6){ lost=true; losePhase(cfg.loseMsg); return; }
+        if(A.onGround && Math.hypot(r.x-A.x,r.y-A.y)<A.r+r.r-12){ lost=true; losePhase(cfg.loseMsg); return; }
         if(r.y>cam.y+H+60) rocks.splice(i,1); }
       if(A.y<=summitY){ winPhase(); return; }
       cam.follow(A.x,A.y,0.10);
@@ -626,7 +682,6 @@ function phaseForest(){
       trees.forEach(tr=> drfrom.push({y:tr.y, kind:'tree', o:tr}));
       honey.forEach(h=>{ if(!h.got) drfrom.push({y:h.y, kind:'honey', o:h}); });
       bees.forEach(b=> drfrom.push({y:b.y, kind:'bee', o:b}));
-      drfrom.push({y:A.y, kind:'bear'});
       drfrom.sort((a,b)=>a.y-b.y);
       for(const d of drfrom){
         if(d.kind==='tree'){ const x=d.o.x+ox, y=d.o.y+oy; if(x<-80||x>W+80||y<-200||y>H+60) continue;
@@ -634,9 +689,9 @@ function phaseForest(){
           tree(x,y,150*d.o.s,'#27582f');
         } else if(d.kind==='honey'){ const x=d.o.x+ox, y=d.o.y+oy;
           softSun(x,y,26,'rgba(255,206,84,.6)'); emoji('🍯',x,y,30);
-        } else if(d.kind==='bee'){ const x=d.o.x+ox, y=d.o.y+oy; emoji('🐝',x,y,24);
-        } else { drawRoamer(A,ox,oy); }
+        } else if(d.kind==='bee'){ const x=d.o.x+ox, y=d.o.y+oy; emoji('🐝',x,y,24); }
       }
+      drawRoamer(A,ox,oy);   // hero always on top (kid-friendly visibility)
       // butterflies fluttering around the meadow
       flutter.forEach(b=>{ const bx=b.x+Math.sin(t*0.02+b.ph)*40+ox, by=b.y+Math.cos(t*0.017+b.ph)*30+oy;
         if(bx<-20||bx>W+20||by<-20||by>H+20) return;
@@ -675,14 +730,14 @@ function phaseRiver(){
   function newTarget(){
     const fromLeft = Math.random()<.5;
     target.x = fromLeft? target.r+10 : W-target.r-10;
-    target.vx = (2.6 + count*0.45) * (fromLeft?1:-1);
+    target.vx = (1.8 + count*0.22) * (fromLeft?1:-1);
   }
   newTarget();
   function jump(){
     if(bear.jumping || result) return;
     bear.jumping=true; bear.jt=0; bear.fromX=bear.x;
     bear.landX=target.x;
-    bear.hit = Math.abs(bear.x - target.x) < target.r;   // aligned? -> safe landing
+    bear.hit = Math.abs(bear.x - target.x) < target.r+12;   // aligned? -> safe landing
   }
   function drawStone(x,y,r,glow){
     ctx.save();
@@ -836,7 +891,7 @@ function phaseCave(){
   const cx=[W*0.32,W*0.68,W*0.32,W*0.68];
   const cyA=[H*0.40,H*0.40,H*0.66,H*0.66];
   for(let i=0;i<4;i++) cells.push({x:cx[i],y:cyA[i],r:62,flash:0});
-  let seq=[], step=0, round=0, need=4, tt=0;
+  let seq=[], step=0, round=0, need=3, tt=0;
   let state='show'; // show | input | wait
   let showIdx=0, showT=0, inputIdx=0;
   function nextRound(){ round++; seq.push(Math.floor(rand(0,4))); state='show'; showIdx=0; showT=0; inputIdx=0; }
@@ -870,8 +925,8 @@ function phaseCave(){
       drips.forEach(d=>{ d.y+=d.v; if(d.y>H){ d.y=d.top; } });
       if(state==='show'){
         showT++;
-        if(showT===20){ flash(seq[showIdx]); }
-        if(showT>=46){ showT=0; showIdx++;
+        if(showT===26){ flash(seq[showIdx]); }
+        if(showT>=64){ showT=0; showIdx++;
           if(showIdx>=seq.length){ state='input'; inputIdx=0; } }
       }
     },
@@ -961,7 +1016,7 @@ function groundTufts(cam,col,step){ ctx.fillStyle=col; const s=step||44;
   for(let x=-sx;x<W;x+=s) for(let y=-sy;y<H;y+=s){ ctx.fillRect(x+6,y+10,4,8); ctx.fillRect(x+24,y+26,4,8); } }
 
 // --- Phase 4: Montanha (climb) ---
-const CFG_MOUNTAIN={ icon:'⛰️', WH:2800, summitY:120, every:24, loseMsg:'Uma rocha atingiu o herói! 🪨',
+const CFG_MOUNTAIN={ icon:'⛰️', WH:2800, summitY:120, every:36, loseMsg:'Uma rocha atingiu o herói! 🪨',
   props:(WH)=>{ const p=[]; for(let i=0;i<34;i++){ const tr=Math.random()<0.5;
     p.push({x: tr?(Math.random()<0.5?rand(24,70):rand(W-70,W-24)):rand(30,W-30), y:rand(160,WH-120), r:rand(8,16), tr, h:rand(70,120)}); } return p; },
   drawRock:(r)=>{ ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
@@ -992,7 +1047,7 @@ const CFG_MOUNTAIN={ icon:'⛰️', WH:2800, summitY:120, every:24, loseMsg:'Uma
 };
 
 // --- Phase 7: Vulcão (climb) ---
-const CFG_VOLCANO={ icon:'🌋', WH:2800, summitY:120, every:20, rmin:3.2, rmax:5.2, vig:0.5, loseMsg:'O herói foi atingido pela lava! 🔥',
+const CFG_VOLCANO={ icon:'🌋', WH:2800, summitY:120, every:32, rmin:2.4, rmax:3.6, vig:0.5, loseMsg:'O herói foi atingido pela lava! 🔥',
   props:(WH)=>{ const p=[]; for(let i=0;i<26;i++) p.push({x:Math.random()<0.5?rand(24,64):rand(W-64,W-24), y:rand(160,WH-120), r:rand(7,15)}); return p; },
   drawRock:(r)=>{ ctx.shadowColor='#ff7a1a'; ctx.shadowBlur=16; ctx.fillStyle='#3a2018'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
     ctx.shadowBlur=0; ctx.fillStyle='#ff8c2a'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.2,r.r*0.5,0,7); ctx.fill();
@@ -1022,7 +1077,7 @@ const CFG_VOLCANO={ icon:'🌋', WH:2800, summitY:120, every:20, rmin:3.2, rmax:
 
 // --- Phase 5: Deserto (collect) ---
 const CFG_DESERT={ WW:1500, WH:1200, need:8, itemEmoji:'💧', itemName:'Água', glow:'rgba(120,200,255,.6)',
-  hazEmoji:'🦂', hazN:5, hazSp:1.6, loseMsg:'Um escorpião picou o herói! 🦂', edge:'rgba(120,80,20,.4)',
+  hazEmoji:'🦂', hazN:3, hazSp:1.0, loseMsg:'Um escorpião picou o herói! 🦂', edge:'rgba(120,80,20,.4)',
   deco:(WW,WH)=>{ const a=[]; for(let i=0;i<14;i++) a.push({x:rand(40,WW-40), y:rand(40,WH-40)}); return a; },
   drawDeco:(o,x,y)=>{ if(x<-40||x>W+40||y<-60||y>H+30) return;
     ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(x,y,16,5,0,0,7); ctx.fill();
@@ -1038,7 +1093,7 @@ const CFG_DESERT={ WW:1500, WH:1200, need:8, itemEmoji:'💧', itemName:'Água',
 
 // --- Phase 6: Praia (collect) ---
 const CFG_BEACH={ WW:1500, WH:1200, need:8, itemEmoji:'🐚', itemName:'Conchas', glow:'rgba(255,200,150,.6)',
-  hazEmoji:'🦀', hazN:5, hazSp:1.8, loseMsg:'Um caranguejo beliscou o herói! 🦀', edge:'rgba(40,110,150,.45)',
+  hazEmoji:'🦀', hazN:3, hazSp:1.1, loseMsg:'Um caranguejo beliscou o herói! 🦀', edge:'rgba(40,110,150,.45)',
   deco:(WW,WH)=>{ const a=[]; for(let i=0;i<10;i++) a.push({x:rand(40,WW-40), y:rand(40,WH-40), st:Math.random()<0.5}); return a; },
   drawDeco:(o,x,y)=>{ if(x<-40||x>W+40||y<-70||y>H+30) return;
     if(o.st){ ctx.fillStyle='#ff8a5b'; for(let k=0;k<5;k++){ const a=k/5*Math.PI*2; ctx.beginPath();
@@ -1062,7 +1117,7 @@ const CFG_BEACH={ WW:1500, WH:1200, need:8, itemEmoji:'🐚', itemName:'Conchas'
 
 // --- Phase 8: Geleira (collect, slippery) ---
 const CFG_ICE={ WW:1500, WH:1200, need:8, itemEmoji:'💎', itemName:'Cristais', glow:'rgba(150,230,255,.7)',
-  hazEmoji:'⛄', hazN:5, hazSp:1.5, slippery:true, vig:0.4, loseMsg:'O herói trombou num boneco de neve! ⛄', edge:'rgba(120,170,200,.4)',
+  hazEmoji:'⛄', hazN:3, hazSp:0.9, slippery:true, vig:0.4, loseMsg:'O herói trombou num boneco de neve! ⛄', edge:'rgba(120,170,200,.4)',
   deco:(WW,WH)=>{ const a=[]; for(let i=0;i<12;i++) a.push({x:rand(40,WW-40), y:rand(40,WH-40), h:rand(26,52)}); return a; },
   drawDeco:(o,x,y)=>{ if(x<-40||x>W+40||y<-70||y>H+30) return;
     ctx.fillStyle='rgba(0,0,0,.10)'; ctx.beginPath(); ctx.ellipse(x,y,12,4,0,0,7); ctx.fill();
@@ -1082,7 +1137,7 @@ const CFG_ICE={ WW:1500, WH:1200, need:8, itemEmoji:'💎', itemName:'Cristais',
 
 // --- Phase 9: Castelo nas Nuvens (collect) ---
 const CFG_SKY={ WW:1500, WH:1200, need:8, itemEmoji:'⭐', itemName:'Estrelas', glow:'rgba(255,235,140,.7)',
-  hazEmoji:'🌩️', hazN:4, hazSp:1.7, vig:0.3, loseMsg:'Uma nuvem-relâmpago atingiu o herói! 🌩️', edge:'rgba(120,140,200,.35)',
+  hazEmoji:'🌩️', hazN:2, hazSp:1.0, vig:0.3, loseMsg:'Uma nuvem-relâmpago atingiu o herói! 🌩️', edge:'rgba(120,140,200,.35)',
   deco:(WW,WH)=>{ const a=[]; for(let i=0;i<14;i++) a.push({x:rand(20,WW-20), y:rand(20,WH-20), s:rand(0.8,1.6)}); return a; },
   drawDeco:(o,x,y)=>{ if(x<-80||x>W+80||y<-40||y>H+30) return; cloud(x,y,o.s,0.9);
     ctx.fillStyle='rgba(190,210,255,.5)'; ctx.beginPath(); ctx.ellipse(x,y+10*o.s,40*o.s,8*o.s,0,0,7); ctx.fill(); },
