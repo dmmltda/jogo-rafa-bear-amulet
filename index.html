@@ -74,7 +74,17 @@
     cursor:pointer; pointer-events:auto; display:flex; align-items:center; justify-content:center; }
   .iconBtn.hidden{ display:none; }
   #muteBtn{ left:12px; }
+  #menuBtn{ left:12px; top:88px; }
   #wardrobeBtn{ right:12px; }
+  #coinChip{ position:absolute; top:46px; left:50%; transform:translateX(-50%); z-index:7;
+    background:rgba(0,0,0,.5); border:1px solid #ffce5466; color:#ffce54; font-weight:bold;
+    font-size:15px; padding:5px 14px; border-radius:16px; pointer-events:none; }
+  #coinChip.hidden{ display:none; }
+  .coinBar{ background:rgba(255,206,84,.16); border:1px solid #ffce5455; color:#ffce54;
+    font-weight:bold; font-size:15px; padding:6px 16px; border-radius:18px; }
+  .cprice{ font-size:9px; color:#ffce54; font-weight:bold; }
+  .outCard.locked{ opacity:.78; }
+  .outCard.locked .ce{ filter:grayscale(.3); }
   /* Roblox-style touch controls */
   #touch{ position:absolute; inset:0; z-index:6; pointer-events:none; }
   #touch.hidden{ display:none; }
@@ -134,7 +144,9 @@
   <div id="toast"></div>
   <button id="skipBtn" class="hidden">Pular ▶</button>
   <button id="muteBtn" class="hidden iconBtn">🔊</button>
+  <button id="menuBtn" class="hidden iconBtn">🏠</button>
   <button id="wardrobeBtn" class="hidden iconBtn">👕</button>
+  <div id="coinChip" class="hidden">🪙 <span class="coinVal">0</span></div>
 
   <!-- Roblox-style touch controls (free-roam phases) -->
   <div id="touch" class="hidden">
@@ -155,6 +167,7 @@
 
   <!-- CHARACTER SELECT + WARDROBE -->
   <div class="screen hidden" id="charScreen">
+    <div class="coinBar">🪙 <span class="coinVal">0</span> moedas</div>
     <h2>Escolha seu herói</h2>
     <div id="charGrid"></div>
     <div class="wardrobe-label">👕 Guarda-roupa</div>
@@ -336,7 +349,15 @@ const OUTFITS=[
   {name:'Auréola', emoji:'😇', draw:(face)=>{ ctx.strokeStyle='#ffe06b'; ctx.lineWidth=2.6; ctx.shadowColor='#ffe06b'; ctx.shadowBlur=8;
     ctx.beginPath(); ctx.ellipse(0,-39,10,3.4,0,0,7); ctx.stroke(); ctx.shadowBlur=0; } },
 ];
+const OUTFIT_PRICE=[0,40,30,15,15,35,20,20,10,25,50];  // cost in coins (0 = free)
 let outfitSel=0;
+// ----- coins + owned outfits (persisted) -----
+let coins=0, owned=[0];
+try{ coins=+(localStorage.getItem('amuletoCoins')||0)||0; owned=JSON.parse(localStorage.getItem('amuletoOwned')||'[0]'); }catch(e){}
+if(!Array.isArray(owned)||!owned.includes(0)) owned=[0];
+function saveProgress(){ try{ localStorage.setItem('amuletoCoins',coins); localStorage.setItem('amuletoOwned',JSON.stringify(owned)); }catch(e){} }
+function updateCoinUI(){ document.querySelectorAll('.coinVal').forEach(e=> e.textContent=coins); }
+function addCoins(n){ coins=Math.max(0,coins+n); saveProgress(); updateCoinUI(); }
 let pieces = 0;      // amulet pieces collected
 let phase = 0;       // current phase index
 let game = null;     // active phase object {update, draw, input}
@@ -419,7 +440,10 @@ const SCREENS=['startScreen','charScreen','introScreen','winScreen','loseScreen'
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
   $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
+  $('menuBtn').classList.add('hidden'); $('coinChip').classList.add('hidden');
   if(!paused) Sound.stop(); }
+function showHudButtons(){ $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
+  $('menuBtn').classList.remove('hidden'); $('coinChip').classList.remove('hidden'); updateCoinUI(); }
 function hideScreens(){ SCREENS.forEach(s=> $(s).classList.add('hidden')); }
 
 // build the amulet HUD gems (one per phase)
@@ -434,15 +458,24 @@ function updateAmulet(){
     card.innerHTML='<div class="ce">'+c.emoji+'</div><div class="cn">'+c.name+'</div>';
     card.onclick=()=>{ charSel=i; document.querySelectorAll('.charCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
     grid.appendChild(card); });
-  const og=$('outfitGrid');
-  OUTFITS.forEach((o,i)=>{ const card=document.createElement('div'); card.className='outCard'+(i===0?' sel':'');
-    card.innerHTML='<div class="ce">'+o.emoji+'</div><div class="cn">'+o.name+'</div>';
-    card.onclick=()=>{ outfitSel=i; document.querySelectorAll('.outCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
-    og.appendChild(card); });
+  const og=$('outfitGrid'); const outCards=[];
+  function renderOut(i){ const o=OUTFITS[i]; const have=owned.includes(i); const sel=outfitSel===i;
+    const tag = have ? '' : '<div class="cprice">🪙'+OUTFIT_PRICE[i]+'</div>';
+    outCards[i].className='outCard'+(sel?' sel':'')+(have?'':' locked');
+    outCards[i].innerHTML='<div class="ce">'+(have?o.emoji:'🔒')+'</div><div class="cn">'+o.name+'</div>'+tag; }
+  OUTFITS.forEach((o,i)=>{ const card=document.createElement('div'); outCards[i]=card; og.appendChild(card);
+    card.onclick=()=>{
+      if(owned.includes(i)){ outfitSel=i; Sound.sfx('click'); }
+      else if(coins>=OUTFIT_PRICE[i]){ addCoins(-OUTFIT_PRICE[i]); owned.push(i); saveProgress(); outfitSel=i;
+        toast('Comprou '+OUTFITS[i].name+'! 🪙-'+OUTFIT_PRICE[i]); Sound.sfx('collect'); }
+      else { toast('Moedas insuficientes 🪙'); Sound.sfx('lose'); return; }
+      OUTFITS.forEach((_,j)=>renderOut(j)); };
+    renderOut(i); });
+  window.__refreshOut=()=>OUTFITS.forEach((_,j)=>renderOut(j));
   document.querySelectorAll('.modeCard').forEach(card=>{ card.onclick=()=>{ gameMode=card.dataset.mode;
     document.querySelectorAll('.modeCard').forEach(e=>e.classList.toggle('sel', e===card)); }; });
 })();
-function openCharSelect(){ show('charScreen'); }
+function openCharSelect(){ updateCoinUI(); if(window.__refreshOut) window.__refreshOut(); show('charScreen'); }
 
 function startGame(){ pieces=0; phase=0; updateAmulet(); $('hud').classList.remove('hidden'); intro(); }
 // after picking a hero -> play the opening story -> start the game
@@ -467,7 +500,7 @@ function beginPhase(){
   hideScreens(); paused=false; lifeMode=false; currentRoam=PHASES[phase].roam;
   // free-roam phases get the Roblox-style joystick + jump
   $('touch').classList.toggle('hidden', !PHASES[phase].roam);
-  $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
+  showHudButtons();
   Sound.start();
   game = makePhase(phase);
 }
@@ -476,7 +509,7 @@ function startLife(){
   hideScreens(); paused=false; lifeMode=true; currentRoam=true;
   $('hud').classList.add('hidden');     // no amulet pieces in life mode
   $('touch').classList.remove('hidden');
-  $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
+  showHudButtons();
   Sound.start();
   game = phaseCity();
 }
@@ -487,16 +520,17 @@ function losePhase(msg){
 }
 function winPhase(){
   game=null; Sound.sfx('win'); Sound.stop();
-  pieces++;
+  pieces++; addCoins(20);   // bonus coins for finishing a phase
   updateAmulet();
-  $('winText').textContent = `Você recuperou ${GEM_EMOJI[phase]} o pedaço ${pieces} de ${TOTAL} do Amuleto Dourado!`;
+  $('winText').textContent = `Você recuperou ${GEM_EMOJI[phase]} o pedaço ${pieces} de ${TOTAL} do Amuleto Dourado!  (+20 🪙)`;
   show('winScreen');
 }
 // open/close the in-game wardrobe (pauses the phase, then resumes it)
-function openWardrobeInGame(){ paused=true; inGameWardrobe=true; Sound.sfx('click'); show('charScreen'); }
+function openWardrobeInGame(){ paused=true; inGameWardrobe=true; Sound.sfx('click');
+  updateCoinUI(); if(window.__refreshOut) window.__refreshOut(); show('charScreen'); }
 function closeWardrobeResume(){ inGameWardrobe=false; paused=false; hideScreens();
   $('touch').classList.toggle('hidden', !currentRoam);
-  $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden'); Sound.start(); }
+  showHudButtons(); Sound.start(); }
 function nextAfterWin(){
   if(pieces>=TOTAL){ show('finalScreen'); confetti.start(); }
   else { phase++; intro(); }
@@ -513,6 +547,8 @@ $('finalBtn').onclick = ()=>{ confetti.stop(); Sound.stop(); $('hud').classList.
 $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
 $('wardrobeBtn').onclick = openWardrobeInGame;
 $('muteBtn').onclick  = ()=>{ const on=Sound.toggle(); $('muteBtn').textContent = on?'🔊':'🔇'; };
+$('menuBtn').onclick  = ()=>{ Sound.sfx('click'); Sound.stop(); confetti.stop();
+  game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden'); show('startScreen'); };
 
 // ======================================================
 //  PHASES
@@ -649,7 +685,7 @@ function phaseCollect(cfg){
   return {
     update(){ t++; if(lost) return;
       roamStep(A,WW,WH,cfg.slippery);
-      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+26){ h.got=true; collected++; Sound.sfx('collect'); toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
+      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+26){ h.got=true; collected++; addCoins(2); Sound.sfx('collect'); toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
       haz.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; if(b.x<50||b.x>WW-50)b.vx*=-1; if(b.y<50||b.y>WH-50)b.vy*=-1;
         if(A.onGround && Math.hypot(b.x-A.x,b.y-A.y)<A.r+6){ lost=true; losePhase(cfg.loseMsg); }});
       cam.follow(A.x,A.y,0.11);
@@ -734,7 +770,7 @@ function phaseForest(){
       roamStep(A,WW,WH);
       // honey pickup
       honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+16){
-        h.got=true; collected++; Sound.sfx('collect'); toast('Mel! '+collected+'/'+need); if(collected>=need){ winPhase(); } }});
+        h.got=true; collected++; addCoins(2); Sound.sfx('collect'); toast('Mel! '+collected+'/'+need); if(collected>=need){ winPhase(); } }});
       // bees roam and sting (safe while hopping in the air)
       bees.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
         if(b.x<50||b.x>WW-50) b.vx*=-1; if(b.y<50||b.y>WH-50) b.vy*=-1;
@@ -877,7 +913,7 @@ function phaseRiver(){
           bear.jumping=false;
           if(bear.hit){
             splash(bear.x, target.y+10, 10, 1);   // landing splash
-            Sound.sfx('collect'); count++;
+            Sound.sfx('collect'); addCoins(2); count++;
             if(count>=need){ winPhase(); return; }
             bear.x=W/2; bear.y=baseY; newTarget();
           } else {
@@ -1125,10 +1161,14 @@ function phaseCity(){
   const WW=2400, WH=2000; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
   let t=0, lastPlace=null;
   const places=[
-    {x:380,y:360,emoji:'🏠',name:'Sua Casa'}, {x:1180,y:380,emoji:'🏫',name:'Escola'},
-    {x:2020,y:460,emoji:'🍦',name:'Sorveteria'}, {x:520,y:1180,emoji:'🏪',name:'Mercado'},
-    {x:1320,y:1240,emoji:'🌳',name:'Parque'}, {x:2060,y:1420,emoji:'🏥',name:'Hospital'},
-    {x:880,y:880,emoji:'🎡',name:'Diversões'}, {x:1760,y:980,emoji:'🍔',name:'Lanchonete'},
+    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Você descansou em casa 😴', coin:2},
+    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5},
+    {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4},
+    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Toque em 👕 para a loja de roupas! 🛍️', coin:3, shop:true},
+    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Brincou no parque! 🎉', coin:4},
+    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3},
+    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Que aventura na roda-gigante! 🎡', coin:6},
+    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hmm, um lanche! 🍔', coin:4},
   ];
   const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
   for(let i=0;i<44;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
@@ -1139,7 +1179,7 @@ function phaseCity(){
   return {
     update(){ t++; if(paused) return; roamStep(A,WW,WH);
       const p=nearPlace();
-      if(p && p!==lastPlace){ lastPlace=p; toast('📍 '+p.name); Sound.sfx('blip'); }
+      if(p && p!==lastPlace){ lastPlace=p; addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
       if(!p) lastPlace=null;
       cam.follow(A.x,A.y,0.12);
     },
