@@ -236,24 +236,51 @@ function makePhase(i){
   return phaseMountain();
 }
 
-// shared bear drawer ----------------------------------
-function drawBear(x,y,s=1,face=1){
+// shared bear drawer — full-bodied bear -----------------
+function drawBear(x,y,s=1,face=1,bob=0){
   ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  const FUR='#8a5a32', FUR_D='#6a4322', FUR_L='#a87a4a', SNOUT='#e3c39a', PAD='#5a3a20';
+  // ground shadow
+  ctx.fillStyle='rgba(0,0,0,.22)';
+  ctx.beginPath(); ctx.ellipse(0,40,23,6,0,0,7); ctx.fill();
+  // back legs / feet
+  ctx.fillStyle=FUR_D;
+  ctx.beginPath(); ctx.ellipse(-11,31,8.5,11,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(11,31,8.5,11,0,0,7); ctx.fill();
+  ctx.fillStyle=PAD;   // paw pads
+  ctx.beginPath(); ctx.ellipse(-11,35,4.2,5,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(11,35,4.2,5,0,0,7); ctx.fill();
+  // arms (slight swing with bob)
+  ctx.fillStyle=FUR;
+  ctx.beginPath(); ctx.ellipse(-16,9+bob*0.6,6.5,12,0.35,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(16,9-bob*0.6,6.5,12,-0.35,0,7); ctx.fill();
   // body
-  ctx.fillStyle='#8a5a32';
-  ctx.beginPath(); ctx.arc(0,0,22,0,7); ctx.fill();
+  ctx.fillStyle=FUR;
+  ctx.beginPath(); ctx.ellipse(0,11,16,19,0,0,7); ctx.fill();
+  // belly patch
+  ctx.fillStyle=FUR_L;
+  ctx.beginPath(); ctx.ellipse(0,14,9.5,12,0,0,7); ctx.fill();
+  // head
+  ctx.fillStyle=FUR;
+  ctx.beginPath(); ctx.arc(0,-18,15.5,0,7); ctx.fill();
   // ears
-  ctx.beginPath(); ctx.arc(-15,-18,8,0,7); ctx.arc(15,-18,8,0,7); ctx.fill();
-  ctx.fillStyle='#6f4524';
-  ctx.beginPath(); ctx.arc(-15,-18,4,0,7); ctx.arc(15,-18,4,0,7); ctx.fill();
-  // snout
-  ctx.fillStyle='#d9b48a';
-  ctx.beginPath(); ctx.ellipse(0,7,11,8,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-12,-28,6,0,7); ctx.arc(12,-28,6,0,7); ctx.fill();
+  ctx.fillStyle=FUR_D;
+  ctx.beginPath(); ctx.arc(-12,-28,3,0,7); ctx.arc(12,-28,3,0,7); ctx.fill();
+  // muzzle
+  ctx.fillStyle=SNOUT;
+  ctx.beginPath(); ctx.ellipse(0,-12,8,6.5,0,0,7); ctx.fill();
   // eyes
   ctx.fillStyle='#241405';
-  ctx.beginPath(); ctx.arc(-8*face,-3,2.6,0,7); ctx.arc(8*face,-3,2.6,0,7); ctx.fill();
-  // nose
-  ctx.beginPath(); ctx.arc(0,3,3,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-6*face,-20,2.4,0,7); ctx.arc(6*face,-20,2.4,0,7); ctx.fill();
+  ctx.fillStyle='#fff';  // eye shine
+  ctx.beginPath(); ctx.arc(-6*face+0.9,-20.8,0.9,0,7); ctx.arc(6*face+0.9,-20.8,0.9,0,7); ctx.fill();
+  // nose + mouth
+  ctx.fillStyle='#241405';
+  ctx.beginPath(); ctx.ellipse(0,-14,2.7,2,0,0,7); ctx.fill();
+  ctx.strokeStyle='#241405'; ctx.lineWidth=1; ctx.beginPath();
+  ctx.moveTo(0,-12); ctx.quadraticCurveTo(-2.5,-9,-4.5,-10); ctx.moveTo(0,-12);
+  ctx.quadraticCurveTo(2.5,-9,4.5,-10); ctx.stroke();
   ctx.restore();
 }
 
@@ -294,16 +321,28 @@ function phaseForest(){
       bees = bees.filter(b=> b.x>-40 && b.x<W+40);
     },
     draw(){
-      // forest bg
-      ctx.fillStyle='#16321f'; ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#1d3f28';
-      for(let i=0;i<8;i++){ const x=(i*70+ (t*0)%70); ctx.beginPath();
-        ctx.moveTo(x,H); ctx.lineTo(x+30,H-110); ctx.lineTo(x+60,H); ctx.fill(); }
+      // sky
+      const sky=ctx.createLinearGradient(0,0,0,H);
+      sky.addColorStop(0,'#bfe3a0'); sky.addColorStop(0.45,'#7fbf6a'); sky.addColorStop(1,'#2f6b3a');
+      ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+      // sun glow
+      ctx.fillStyle='rgba(255,250,210,.5)';
+      ctx.beginPath(); ctx.arc(W*0.8,90,70,0,7); ctx.fill();
+      // distant tree line
+      ctx.fillStyle='#3c7a47';
+      for(let i=0;i<9;i++){ const x=i*64-10; tree(x,H*0.42,46,'#2e6238'); }
+      // nearer, darker trees
+      ctx.fillStyle='#1f4a2b';
+      for(let i=0;i<6;i++){ const x=i*100+10; tree(x,H+30,150,'#1c4226'); }
+      // grassy ground
+      ctx.fillStyle='#3e7d3f'; ctx.fillRect(0,H-70,W,70);
+      ctx.fillStyle='#357036';
+      for(let i=0;i<W;i+=14){ ctx.fillRect(i,H-72,3,8); }
       // progress
       banner('Mel: '+collected+'/'+need);
-      honey.forEach(h=>{ if(h.got)return; emoji('🍯',h.x,h.y,26); });
+      honey.forEach(h=>{ if(h.got)return; emoji('🍯',h.x,h.y,28); });
       bees.forEach(b=> emoji('🐝',b.x,b.y,24));
-      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1);
+      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1, Math.sin(t*0.25)*2);
     }
   };
 }
@@ -469,17 +508,37 @@ function phaseMountain(){
       if(t>=survive){ winPhase(); }
     },
     draw(){
-      const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3a3550'); g.addColorStop(1,'#15131f');
+      // dusk sky
+      const g=ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0,'#2b3a6b'); g.addColorStop(0.5,'#5a4a72'); g.addColorStop(1,'#241a2e');
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      // mountain
-      ctx.fillStyle='#262234';
-      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W*0.5,120); ctx.lineTo(W,H); ctx.fill();
-      ctx.fillStyle='#ece9f5';
-      ctx.beginPath(); ctx.moveTo(W*0.5,120); ctx.lineTo(W*0.42,210); ctx.lineTo(W*0.5,190); ctx.lineTo(W*0.58,210); ctx.fill();
-      rocks.forEach(r=>{ ctx.fillStyle='#7a6a52';
+      // stars
+      ctx.fillStyle='rgba(255,255,255,.7)';
+      for(let i=0;i<26;i++){ const sx=(i*97+31)%W, sy=(i*53+17)%260; ctx.fillRect(sx,sy,2,2); }
+      // back mountain range
+      ctx.fillStyle='#3b3552';
+      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W*0.25,H*0.45); ctx.lineTo(W*0.5,H*0.7);
+      ctx.lineTo(W*0.78,H*0.40); ctx.lineTo(W,H*0.72); ctx.lineTo(W,H); ctx.fill();
+      // main mountain
+      ctx.fillStyle='#2b2740';
+      ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W*0.5,110); ctx.lineTo(W,H); ctx.fill();
+      // snow cap
+      ctx.fillStyle='#eef0fb';
+      ctx.beginPath(); ctx.moveTo(W*0.5,110); ctx.lineTo(W*0.41,205);
+      ctx.lineTo(W*0.47,182); ctx.lineTo(W*0.5,200); ctx.lineTo(W*0.53,182);
+      ctx.lineTo(W*0.59,205); ctx.fill();
+      // ground ledge
+      ctx.fillStyle='#221b30'; ctx.fillRect(0,H-46,W,46);
+      // rocks with shading
+      rocks.forEach(r=>{
+        ctx.fillStyle='#8a795e';
         ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.fill();
-        ctx.fillStyle='#5d5040'; ctx.beginPath(); ctx.arc(r.x-r.r*0.3,r.y-r.r*0.3,r.r*0.4,0,7); ctx.fill(); });
-      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1);
+        ctx.fillStyle='#6b5c45';
+        ctx.beginPath(); ctx.arc(r.x+r.r*0.3,r.y+r.r*0.3,r.r*0.6,0,7); ctx.fill();
+        ctx.fillStyle='#a89478';
+        ctx.beginPath(); ctx.arc(r.x-r.r*0.32,r.y-r.r*0.32,r.r*0.32,0,7); ctx.fill();
+      });
+      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1, Math.sin(t*0.4)*2);
       const left=Math.ceil((survive-t)/60);
       banner('Sobreviva: '+left+'s');
     }
@@ -502,6 +561,20 @@ function hint(txt){
 function emoji(ch,x,y,size){
   ctx.save(); ctx.font=size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(ch,x,y); ctx.restore();
+}
+// pine tree: trunk at (x,baseY) growing upward by height h
+function tree(x,baseY,h,col){
+  ctx.save();
+  ctx.fillStyle='#5a3a1e';
+  ctx.fillRect(x-h*0.04, baseY-h*0.18, h*0.08, h*0.18);
+  ctx.fillStyle=col;
+  for(let k=0;k<3;k++){
+    const ty=baseY - h*0.12 - k*h*0.26;
+    const w=h*(0.34-k*0.07);
+    ctx.beginPath(); ctx.moveTo(x,ty-h*0.30);
+    ctx.lineTo(x+w,ty); ctx.lineTo(x-w,ty); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
 }
 
 // ---------- confetti for final ----------
