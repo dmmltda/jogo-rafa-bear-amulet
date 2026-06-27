@@ -130,6 +130,24 @@
     display:flex; flex-direction:column; align-items:center; gap:3px; transition:.15s; }
   .modeCard .ce{ font-size:30px; } .modeCard .cn{ font-size:13px; font-weight:bold; }
   .modeCard.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); transform:translateY(-2px); }
+  /* create-your-character screen */
+  #humanScreen{ justify-content:flex-start; overflow-y:auto; gap:8px; padding-top:18px; padding-bottom:22px; }
+  #humanPrev{ width:130px; height:160px; background:rgba(255,255,255,.07);
+    border:2px solid rgba(255,255,255,.18); border-radius:16px; }
+  .cc-label{ font-size:14px; font-weight:bold; color:var(--gold); margin-top:4px; }
+  .cc-row{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; width:100%; max-width:300px; }
+  .cc-card{ pointer-events:auto; cursor:pointer; background:rgba(255,255,255,.08);
+    border:2px solid rgba(255,255,255,.18); border-radius:14px; padding:8px 4px;
+    display:flex; flex-direction:column; align-items:center; gap:3px; transition:.15s; }
+  .cc-card .ce{ font-size:28px; } .cc-card .cn{ font-size:12px; font-weight:bold; }
+  .cc-card.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); transform:translateY(-2px); }
+  .cc-sw{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px; width:100%; max-width:300px; }
+  .cc-swatch{ width:34px; height:34px; border-radius:50%; cursor:pointer; pointer-events:auto;
+    border:3px solid rgba(255,255,255,.25); transition:.12s; }
+  .cc-swatch.sel{ border-color:var(--gold); transform:scale(1.15); }
+  #humanOutfitGrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; width:100%; max-width:300px; }
+  .cc-btnrow{ display:flex; gap:12px; margin-top:8px; }
+  .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
 </style>
 </head>
 <body>
@@ -178,6 +196,32 @@
       <div class="modeCard" data-mode="life"><div class="ce">🏙️</div><div class="cn">Modo Vida</div></div>
     </div>
     <button class="btn" id="charBtn">Confirmar</button>
+  </div>
+
+  <!-- CRIAR PERSONAGEM (VOCÊ) -->
+  <div class="screen hidden" id="humanScreen">
+    <h2>Crie você 🧑</h2>
+    <canvas id="humanPrev" width="160" height="196"></canvas>
+    <div class="cc-label">Quem é você?</div>
+    <div class="cc-row" id="genderRow">
+      <div class="cc-card sel" data-g="menino"><div class="ce">👦</div><div class="cn">Homem</div></div>
+      <div class="cc-card" data-g="menina"><div class="ce">👧</div><div class="cn">Mulher</div></div>
+    </div>
+    <div class="cc-label">Cabelo</div>
+    <div class="cc-row" id="hairRow">
+      <div class="cc-card sel" data-h="menino"><div class="ce">💇‍♂️</div><div class="cn">Menino</div></div>
+      <div class="cc-card" data-h="menina"><div class="ce">💇‍♀️</div><div class="cn">Menina</div></div>
+    </div>
+    <div class="cc-label">Cor do cabelo</div>
+    <div class="cc-sw" id="hairColRow"></div>
+    <div class="cc-label">Cor da pele</div>
+    <div class="cc-sw" id="skinRow"></div>
+    <div class="cc-label">Roupa</div>
+    <div id="humanOutfitGrid"></div>
+    <div class="cc-btnrow">
+      <button class="btn ghost" id="humanBackBtn">Voltar</button>
+      <button class="btn" id="humanDoneBtn">Terminar ✅</button>
+    </div>
   </div>
 
   <!-- PHASE INTRO -->
@@ -307,6 +351,25 @@ const CHARS=[
   {name:'Porquinho',emoji:'🐷', fur:'#f7b6c8', fdark:'#e58aa6', flight:'#ffd1dd', belly:'#ffe3ea', bellyD:'#f3c0cf', muzzle:'#ffd1dd', out:'#b86a82', nose:'#e07b95', ear:'pointy', earIn:'#ef9ab1'},
   {name:'Sapo',    emoji:'🐸', fur:'#7fc24a', fdark:'#5a9a32', flight:'#9bd86a', belly:'#e7f3c0', bellyD:'#cfe39a', muzzle:'#cfe9a0', out:'#3d6e22', nose:'#3d6e22', ear:'none'},
 ];
+// ----- "Você": a fully customizable HUMAN hero (plays in both game modes) -----
+const HUMAN = { name:'Você', emoji:'🧑', human:true, custom:false,
+  gender:'menino', hair:'menino', hairColor:'#5a3a1a', skin:'#f1c9a5', outfit:4,
+  fur:'#f1c9a5', out:'#3a2a20' };   // fur/out kept in sync so generic code (car driver, NPC tint) works
+CHARS.push(HUMAN);
+const HUMAN_INDEX = CHARS.length-1;
+// 8 roupas: 2 vestidos, 2 conjuntos de menina, 4 conjuntos de menino
+const HUMAN_OUTFITS=[
+  {name:'Vestido Rosa',  emoji:'👗', kind:'dress', main:'#ff7eb0', mainD:'#e0568f', trim:'#ffffff', shoe:'#ff5b8a'},
+  {name:'Vestido Azul',  emoji:'💙', kind:'dress', main:'#7ec8e3', mainD:'#5aa8c8', trim:'#ffffff', shoe:'#4f9bd6'},
+  {name:'Menina 1',      emoji:'🎀', kind:'girl', top:'#ff8fab', topD:'#e06b8a', bottom:'#ffd23f', bottomD:'#e0b020', shoe:'#ffffff'},
+  {name:'Menina 2',      emoji:'🌸', kind:'girl', top:'#b07ee0', topD:'#8e5cc0', bottom:'#ff7eb0', bottomD:'#e0568f', shoe:'#ffffff'},
+  {name:'Menino 1',      emoji:'👕', kind:'boy', top:'#4ec0ff', topD:'#2a8fd0', bottom:'#3a4a6a', bottomD:'#2a3550', shoe:'#ffffff'},
+  {name:'Menino 2',      emoji:'⚽', kind:'boy', top:'#ff5b5b', topD:'#c23a3a', bottom:'#2b3340', bottomD:'#1b212b', shoe:'#ffffff'},
+  {name:'Menino 3',      emoji:'🌿', kind:'boy', top:'#7fc24a', topD:'#5a9a32', bottom:'#5b4226', bottomD:'#3a2a18', shoe:'#ffffff'},
+  {name:'Menino 4',      emoji:'⭐', kind:'boy', top:'#ffd23f', topD:'#e0b020', bottom:'#4a4a55', bottomD:'#33333d', shoe:'#ffffff'},
+];
+const SKIN_TONES=['#ffe0bd','#f1c9a5','#e0ac82','#c68642','#a3623a','#7a4a28'];
+const HAIR_COLORS=['#2b2118','#5a3a1a','#8a5a2b','#c8902f','#e8c468','#b5453a','#9a9aa6','#3a4a8a'];
 let charSel=0;
 // ----- wardrobe: outfits/accessories drawn on top of the hero (local coords) -----
 const OUTFITS=[
@@ -436,7 +499,7 @@ function makeCam(worldW,worldH){
 })();
 
 // ---------- screen flow ----------
-const SCREENS=['startScreen','charScreen','introScreen','winScreen','loseScreen','finalScreen'];
+const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen'];
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
   $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
@@ -456,7 +519,9 @@ function updateAmulet(){
 (function(){ const grid=$('charGrid');
   CHARS.forEach((c,i)=>{ const card=document.createElement('div'); card.className='charCard'+(i===0?' sel':'');
     card.innerHTML='<div class="ce">'+c.emoji+'</div><div class="cn">'+c.name+'</div>';
-    card.onclick=()=>{ charSel=i; document.querySelectorAll('.charCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
+    card.onclick=()=>{ Sound.sfx('click');
+      if(c.human){ openHumanCreator(); return; }
+      charSel=i; document.querySelectorAll('.charCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
     grid.appendChild(card); });
   const og=$('outfitGrid'); const outCards=[];
   function renderOut(i){ const o=OUTFITS[i]; const have=owned.includes(i); const sel=outfitSel===i;
@@ -476,6 +541,55 @@ function updateAmulet(){
     document.querySelectorAll('.modeCard').forEach(e=>e.classList.toggle('sel', e===card)); }; });
 })();
 function openCharSelect(){ updateCoinUI(); if(window.__refreshOut) window.__refreshOut(); show('charScreen'); }
+
+// ----- "Crie você": human character creator -----
+(function(){
+  const pc = $('humanPrev'); const pctx = pc.getContext('2d');
+  function renderPrev(){ pctx.clearRect(0,0,pc.width,pc.height);
+    drawHuman(HUMAN, pc.width/2, 108, 1.72, 1, 0, null, pctx); }
+  function selRow(sel, all){ all.forEach(e=>e.classList.toggle('sel', e===sel)); }
+  // gender
+  document.querySelectorAll('#genderRow .cc-card').forEach((card,i,all)=>{
+    card.onclick=()=>{ Sound.sfx('click'); HUMAN.gender=card.dataset.g; selRow(card,all);
+      // gentle defaults: pick matching hair + a fitting outfit the first time
+      if(card.dataset.g==='menina'){ setHair('menina'); if(HUMAN.outfit>3) setOutfit(0); }
+      else { setHair('menino'); if(HUMAN.outfit<4) setOutfit(4); }
+      renderPrev(); }; });
+  // hair style
+  function setHair(h){ HUMAN.hair=h;
+    document.querySelectorAll('#hairRow .cc-card').forEach(e=>e.classList.toggle('sel', e.dataset.h===h)); }
+  document.querySelectorAll('#hairRow .cc-card').forEach(card=>{
+    card.onclick=()=>{ Sound.sfx('click'); setHair(card.dataset.h); renderPrev(); }; });
+  // colour swatches
+  function buildSwatches(rowId, colors, getCur, setCur){ const row=$(rowId);
+    colors.forEach(col=>{ const sw=document.createElement('div'); sw.className='cc-swatch';
+      sw.style.background=col; sw.dataset.col=col;
+      sw.onclick=()=>{ Sound.sfx('click'); setCur(col);
+        row.querySelectorAll('.cc-swatch').forEach(e=>e.classList.toggle('sel', e.dataset.col===col));
+        renderPrev(); };
+      row.appendChild(sw); }); }
+  function markSwatch(rowId, val){ $(rowId).querySelectorAll('.cc-swatch').forEach(e=>e.classList.toggle('sel', e.dataset.col===val)); }
+  buildSwatches('hairColRow', HAIR_COLORS, ()=>HUMAN.hairColor, v=>HUMAN.hairColor=v);
+  buildSwatches('skinRow', SKIN_TONES, ()=>HUMAN.skin, v=>{ HUMAN.skin=v; HUMAN.fur=v; });
+  // outfits
+  const og=$('humanOutfitGrid'); const outCards=[];
+  function setOutfit(i){ HUMAN.outfit=i; outCards.forEach((e,j)=>e.classList.toggle('sel', j===i)); }
+  HUMAN_OUTFITS.forEach((o,i)=>{ const card=document.createElement('div'); card.className='outCard';
+    card.innerHTML='<div class="ce">'+o.emoji+'</div><div class="cn">'+o.name+'</div>';
+    card.onclick=()=>{ Sound.sfx('click'); setOutfit(i); renderPrev(); };
+    outCards[i]=card; og.appendChild(card); });
+  window.__openHumanCreator = ()=>{
+    document.querySelectorAll('#genderRow .cc-card').forEach(e=>e.classList.toggle('sel', e.dataset.g===HUMAN.gender));
+    setHair(HUMAN.hair); setOutfit(HUMAN.outfit);
+    markSwatch('hairColRow', HUMAN.hairColor); markSwatch('skinRow', HUMAN.skin);
+    show('humanScreen'); renderPrev(); };
+  $('humanBackBtn').onclick = ()=>{ Sound.sfx('click'); show('charScreen'); };
+  $('humanDoneBtn').onclick = ()=>{ Sound.sfx('collect'); HUMAN.custom=true; HUMAN.fur=HUMAN.skin;
+    charSel=HUMAN_INDEX; outfitSel=0;
+    document.querySelectorAll('.charCard').forEach((e,j)=>e.classList.toggle('sel', j===HUMAN_INDEX));
+    show('charScreen'); toast('Personagem criado! 🎉'); };
+})();
+function openHumanCreator(){ Sound.ensure(); if(window.__openHumanCreator) window.__openHumanCreator(); }
 
 function startGame(){ pieces=0; phase=0; updateAmulet(); $('hud').classList.remove('hidden'); intro(); }
 // after picking a hero -> play the opening story -> start the game
@@ -557,7 +671,113 @@ function makePhase(i){ return PHASES[i].build(); }
 
 // shared character drawer (parametrised by a CHARS def) -----------------
 // run: number => walk cycle phase; 'jump' => airborne pose; null => idle
+// lighten (amt>0, toward white) or darken (amt<0, toward black) a #hex color
+function shade(col,amt){
+  let h=(''+col).replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  let r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  if(isNaN(r)) return col;
+  const t=amt<0?0:255, p=Math.abs(amt)/100;
+  r=Math.round(r+(t-r)*p); g=Math.round(g+(t-g)*p); b=Math.round(b+(t-b)*p);
+  return 'rgb('+r+','+g+','+b+')';
+}
+// ----- the customizable HUMAN hero (own renderer; can use any drawing context) -----
+function drawHuman(def,x,y,s=1,face=1,bob=0,run=null,c=ctx){
+  function rr(x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y);
+    c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+  c.save(); c.translate(x,y); c.scale(s,s);
+  face = face||1;
+  const O = HUMAN_OUTFITS[def.outfit] || HUMAN_OUTFITS[4];
+  const skin=def.skin, skinD=shade(skin,-16), skinL=shade(skin,16);
+  const hairC=def.hairColor, hairD=shade(hairC,-30);
+  const OUT='#3a2a20';
+  const dress = O.kind==='dress';
+  const topC = dress? O.main : O.top,    topD = dress? O.mainD : O.topD;
+  const botC = dress? O.main : O.bottom, botD = dress? O.mainD : O.bottomD;
+  const running = typeof run==='number', jumping = run==='jump';
+  const sw = running? Math.sin(run)*6 : 0;
+  c.lineJoin='round';
+  // ground shadow
+  c.fillStyle='rgba(0,0,0,.22)'; c.beginPath(); c.ellipse(0,40,jumping?13:20,6,0,0,7); c.fill();
+  // long hair behind the body (girl style)
+  if(def.hair==='menina'){ c.fillStyle=hairC; c.strokeStyle=hairD; c.lineWidth=1.4;
+    c.beginPath(); c.ellipse(-12,-4,6.5,21,0.12,0,7); c.fill(); c.stroke();
+    c.beginPath(); c.ellipse(12,-4,6.5,21,-0.12,0,7); c.fill(); c.stroke(); }
+  // legs + shoes
+  let lx=-6, rx=6, ly=33, ry=33;
+  if(running){ lx=-6+sw*0.7; rx=6-sw*0.7; }
+  else if(jumping){ lx=-5; rx=5; ly=29; ry=29; }
+  const legC = dress? skin : botC;
+  c.strokeStyle=OUT; c.lineWidth=2.2;
+  [[lx,ly],[rx,ry]].forEach(([cx,cy])=>{
+    c.fillStyle=legC; c.beginPath(); c.ellipse(cx,cy,4.6,9,0,0,7); c.fill(); c.stroke();
+    c.fillStyle=O.shoe||'#fff'; c.beginPath(); c.ellipse(cx,cy+9,5,3.6,0,0,7); c.fill(); c.stroke();
+  });
+  // arms: skin forearm + short sleeve + hand
+  const aly = jumping? -4 : 7 - sw*0.5 + bob*0.5;
+  const ary = jumping? -4 : 7 + sw*0.5 - bob*0.5;
+  [[-13,aly,0.3],[13,ary,-0.3]].forEach(([cx,cy,rot])=>{
+    c.strokeStyle=OUT; c.lineWidth=2.2;
+    c.fillStyle=skin; c.beginPath(); c.ellipse(cx,cy+4,3.8,8,rot,0,7); c.fill(); c.stroke();
+    c.fillStyle=topC; c.beginPath(); c.ellipse(cx,cy-2,4.6,5,rot,0,7); c.fill(); c.stroke();
+    c.fillStyle=skinL; c.beginPath(); c.arc(cx+(cx<0?-0.5:0.5),cy+11,3,0,7); c.fill(); c.stroke();
+  });
+  // body / clothes
+  c.strokeStyle=OUT; c.lineWidth=2.4;
+  if(dress){
+    c.fillStyle=topC; rr(-10,-5,20,12,6); c.fill(); c.stroke();
+    c.fillStyle=botC; c.beginPath(); c.moveTo(-9,3); c.lineTo(9,3);
+    c.lineTo(15,26); c.quadraticCurveTo(0,31,-15,26); c.closePath(); c.fill(); c.stroke();
+    c.strokeStyle=O.trim; c.lineWidth=1.6; c.beginPath();
+    c.moveTo(-15,26); c.quadraticCurveTo(0,31,15,26); c.stroke();
+  } else if(O.kind==='girl'){
+    c.fillStyle=topC; rr(-11,-5,22,15,6); c.fill(); c.stroke();
+    c.fillStyle=botC; c.beginPath(); c.moveTo(-10,8); c.lineTo(10,8);
+    c.lineTo(13,21); c.quadraticCurveTo(0,25,-13,21); c.closePath(); c.fill(); c.stroke();
+  } else {
+    c.fillStyle=topC; rr(-11,-5,22,18,6); c.fill(); c.stroke();
+    c.strokeStyle=topD; c.lineWidth=1.4; c.beginPath(); c.moveTo(0,-4); c.lineTo(0,12); c.stroke();
+  }
+  // neck
+  c.fillStyle=skinD; c.fillRect(-3.5,-9,7,6);
+  // head
+  c.fillStyle=skin; c.strokeStyle=OUT; c.lineWidth=2.4;
+  c.beginPath(); c.arc(-15,-18,2.6,0,7); c.arc(15,-18,2.6,0,7); c.fill(); c.stroke();   // ears
+  c.beginPath(); c.arc(0,-19,15,0,7); c.fill(); c.stroke();
+  // hair (clipped to the head so the shape always stays neat)
+  c.save(); c.beginPath(); c.arc(0,-19,15,0,7); c.clip(); c.fillStyle=hairC;
+  if(def.hair==='menina'){
+    c.beginPath(); c.moveTo(-17,-36); c.lineTo(17,-36); c.lineTo(17,-7); c.lineTo(10.5,-7);
+    c.lineTo(10.5,-22); c.quadraticCurveTo(5,-26,1,-24); c.lineTo(0,-30);
+    c.quadraticCurveTo(-5,-26,-10.5,-22); c.lineTo(-10.5,-7); c.lineTo(-17,-7);
+    c.closePath(); c.fill();
+  } else {
+    c.beginPath(); c.moveTo(-17,-36); c.lineTo(17,-36); c.lineTo(17,-24);
+    c.quadraticCurveTo(11,-21,7,-25); c.quadraticCurveTo(3,-21,-1,-25);
+    c.quadraticCurveTo(-5,-21,-9,-25); c.quadraticCurveTo(-13,-22,-17,-24);
+    c.closePath(); c.fill();
+  }
+  c.restore();
+  c.strokeStyle=OUT; c.lineWidth=2.4; c.beginPath(); c.arc(0,-19,15,0,7); c.stroke();   // crisp head edge
+  // face
+  c.fillStyle='#fff'; c.beginPath();
+  c.ellipse(-5.5,-18.5,3,3.6,0,0,7); c.ellipse(5.5,-18.5,3,3.6,0,0,7); c.fill();
+  c.fillStyle='#2a1a10'; c.beginPath();
+  c.arc(-5.5+face*0.5,-18,2,0,7); c.arc(5.5+face*0.5,-18,2,0,7); c.fill();
+  c.fillStyle='#fff'; c.beginPath();
+  c.arc(-5+face*0.5,-19,0.8,0,7); c.arc(6+face*0.5,-19,0.8,0,7); c.fill();
+  c.strokeStyle=hairD; c.lineWidth=1.4; c.beginPath();
+  c.moveTo(-8,-23.5); c.lineTo(-3,-24); c.moveTo(3,-24); c.lineTo(8,-23.5); c.stroke();   // brows
+  c.fillStyle=skinD; c.beginPath(); c.arc(0,-14,1,0,7); c.fill();   // nose
+  c.strokeStyle='#b3554a'; c.lineWidth=1.6; c.beginPath(); c.arc(0,-13,4,0.15*Math.PI,0.85*Math.PI); c.stroke();   // smile
+  c.fillStyle='rgba(255,135,150,.5)'; c.beginPath();
+  c.ellipse(-9,-13,2.8,2,0,0,7); c.ellipse(9,-13,2.8,2,0,0,7); c.fill();   // cheeks
+  // accessory hat from the guarda-roupa (only on the real game canvas)
+  if(c===ctx && typeof OUTFITS!=='undefined' && OUTFITS[outfitSel] && OUTFITS[outfitSel].draw) OUTFITS[outfitSel].draw(face);
+  c.restore();
+}
 function drawChar(def,x,y,s=1,face=1,bob=0,run=null){
+  if(def && def.human){ drawHuman(def,x,y,s,face,bob,run); return; }
   ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
   const OUT=def.out, FUR=def.fur, FUR_D=def.fdark, FUR_L=def.flight;
   const running = typeof run==='number';
