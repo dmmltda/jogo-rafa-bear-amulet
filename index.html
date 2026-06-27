@@ -1159,51 +1159,94 @@ function drawPlace(p,x,y){ if(x<-170||x>W+170||y<-240||y>H+60) return;
 }
 function phaseCity(){
   const WW=2400, WH=2000; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
-  let t=0, lastPlace=null;
+  let t=0, lastPlace=null, inside=null, cityX=0, cityY=0;
   const places=[
-    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Você descansou em casa 😴', coin:2},
-    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5},
-    {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4},
-    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Fez comprinhas no mercado! 🛒', coin:3},
-    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Brincou no parque! 🎉', coin:4},
-    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3},
-    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Que aventura na roda-gigante! 🎡', coin:6},
-    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hmm, um lanche! 🍔', coin:4},
+    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Você descansou em casa 😴', coin:2, wall:'#f3e4c4', floor:'#caa46e', props:['🛋️','📺','🪴','🖼️']},
+    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Aula concluída! 📚', coin:5, wall:'#d8ecd8', floor:'#b89a6a', props:['📚','✏️','🍎','🧑‍🏫','🌍']},
+    {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia, sorvete! 🍦', coin:4, wall:'#ffe3ef', floor:'#e8c9a0', props:['🍦','🍨','🍧','🧁']},
+    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Fez comprinhas no mercado! 🛒', coin:3, wall:'#e6efff', floor:'#c8b48a', props:['🛒','🥫','🍞','🧀','🍎']},
+    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Brincou no parque! 🎉', coin:4, wall:'#bfe8ff', floor:'#7fc06a', props:['🌳','🎈','🪁','⚽','🌷']},
+    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3, wall:'#eef6ff', floor:'#cfd6dc', props:['🩺','💊','🛏️','➕']},
+    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Que aventura! 🎡', coin:6, wall:'#ffe7c2', floor:'#d8a86a', props:['🎡','🎠','🎢','🎈','🍿']},
+    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hmm, um lanche! 🍔', coin:4, wall:'#fff0c2', floor:'#caa46e', props:['🍔','🍟','🥤','🌭','🍕']},
   ];
   const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
   for(let i=0;i<44;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
     if(places.some(p=>Math.hypot(p.x-x,p.y-y)<150)) continue;
     blds.push({x,y,w:rand(72,120),h:rand(74,138),c:`hsl(${(i*47)%360},42%,68%)`,roof:roofs[i%roofs.length]}); }
   cam.snap(A.x,A.y);
-  function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<72) return p; } return null; }
+  function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<78) return p; } return null; }
+  function enter(p){ inside=p; cityX=A.x; cityY=A.y; A.x=W/2; A.y=170; A.vx=A.vy=0; A.hopY=0; A.onGround=true;
+    addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
+  function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
+  const DOOR={x:W/2, y:H-92};
   return {
-    update(){ t++; if(paused) return; roamStep(A,WW,WH);
+    update(){ t++; if(paused) return;
+      if(inside){
+        takeJump();  // ignore jumps indoors
+        const ax=readAxis(); A.vx+=ax.x*0.9; A.vy+=ax.y*0.9; A.vx*=0.8; A.vy*=0.8;
+        const sp=Math.hypot(A.vx,A.vy); if(sp>5){ A.vx*=5/sp; A.vy*=5/sp; }
+        A.x=clamp(A.x+A.vx,48,W-48); A.y=clamp(A.y+A.vy,150,H-70);
+        if(Math.abs(A.vx)>0.25) A.face=A.vx>0?1:-1; A.moving=Math.hypot(A.vx,A.vy); A.walk+=A.moving*0.17;
+        if(Math.hypot(A.x-DOOR.x,A.y-DOOR.y)<42) leave();
+        return;
+      }
       const p=nearPlace();
-      if(p && p!==lastPlace){ lastPlace=p; addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
+      if(p && jumpQueued){ jumpQueued=false; enter(p); return; }   // ⤴ enters instead of hopping
+      roamStep(A,WW,WH);
+      if(p && p!==lastPlace){ lastPlace=p; Sound.sfx('blip'); }
       if(!p) lastPlace=null;
       cam.follow(A.x,A.y,0.12);
     },
-    draw(){ const ox=-cam.x, oy=-cam.y;
+    draw(){
+      if(inside){ drawCityInterior(inside, A, DOOR); return; }
+      const ox=-cam.x, oy=-cam.y;
       ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
-      // roads (grid)
       ctx.fillStyle='#6b6f78';
       for(let gx=0;gx<=WW;gx+=400){ const x=gx+ox; if(x>-30&&x<W+30) ctx.fillRect(x-22,0,44,H); }
       for(let gy=0;gy<=WH;gy+=400){ const y=gy+oy; if(y>-30&&y<H+30) ctx.fillRect(0,y-22,W,44); }
-      ctx.fillStyle='#ffd34d';   // lane dashes
+      ctx.fillStyle='#ffd34d';
       for(let gx=0;gx<=WW;gx+=400){ const x=gx+ox; if(x>-30&&x<W+30) for(let yy=-((cam.y)%30);yy<H;yy+=30) ctx.fillRect(x-2,yy,4,14); }
       for(let gy=0;gy<=WH;gy+=400){ const y=gy+oy; if(y>-30&&y<H+30) for(let xx=-((cam.x)%30);xx<W;xx+=30) ctx.fillRect(xx,y-2,14,4); }
-      // depth-sorted buildings + places + hero
       const list=[];
       blds.forEach(b=> list.push({y:b.y,k:'b',o:b}));
       places.forEach(p=> list.push({y:p.y,k:'p',o:p}));
       list.sort((a,b)=>a.y-b.y);
       for(const d of list){ if(d.k==='b') drawBuilding(d.o,d.o.x+ox,d.o.y+oy); else drawPlace(d.o,d.o.x+ox,d.o.y+oy); }
       drawRoamer(A,ox,oy);
+      // "enter" prompt when standing on a place
+      const p=nearPlace();
+      if(p){ const px=W/2, py=H-150; ctx.fillStyle='rgba(0,0,0,.6)'; rrect(px-130,py-18,260,34,16); ctx.fill();
+        ctx.fillStyle='#ffce54'; ctx.font='bold 16px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('⤴ entrar em '+p.name, px, py); }
       vignette(0.30);
       banner('🏙️ Modo Vida — explore a cidade');
-      hint('Direcional/WASD para andar · visite os lugares 📍 · 👕 troca a roupa');
+      hint('Direcional/WASD para andar · ⤴ entra nos lugares · 👕 roupa');
     }
   };
+}
+// interior mini-scene of a city place
+function drawCityInterior(p, A, DOOR){
+  ctx.fillStyle=p.wall; ctx.fillRect(0,0,W,H);                 // back wall
+  ctx.fillStyle=p.floor; ctx.fillRect(0,H*0.60,W,H*0.40);      // floor
+  ctx.fillStyle='rgba(0,0,0,.07)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.60,2,H*0.40);
+  ctx.fillStyle='rgba(0,0,0,.06)'; ctx.fillRect(0,H*0.60,W,4);
+  // place sign on the wall
+  emoji(p.emoji, W/2, 92, 64);
+  const nameW=p.name.length*11+30; ctx.fillStyle='rgba(0,0,0,.5)'; rrect(W/2-nameW/2,128,nameW,30,12); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 18px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.name,W/2,143);
+  // themed items along the room
+  const ip=p.props||[]; ip.forEach((e,i)=>{ const x=W*(i+1)/(ip.length+1); emoji(e, x, H*0.45, 40); });
+  // door (exit)
+  ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-36,DOOR.y-66,72,128,8); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(DOOR.x-30,DOOR.y-60,60,116,6); ctx.fill();
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(DOOR.x+18,DOOR.y,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('SAIR 🚪',DOOR.x,DOOR.y+78);
+  // hero
+  drawRoamer(A,0,0);
+  vignette(0.34);
+  banner('🚪 '+p.name);
+  hint('Ande até a porta 🚪 para sair · 👕 troca a roupa');
 }
 
 // ===================== PHASE CONFIGS =====================
