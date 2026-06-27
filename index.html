@@ -1166,7 +1166,7 @@ function phaseCity(){
     {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia! 🍦', coin:4, icecream:true, wall:'#ffe3ef', floor:'#f0d6bd'},
     {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Bem-vindo ao mercado! 🛒', coin:3, shop:true, wall:'#eef3ff', floor:'#c8b48a'},
     {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true},
-    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3, wall:'#eef6ff', floor:'#cfd6dc', props:['🩺','💊','🛏️','➕']},
+    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Bem-vindo ao hospital! 🏥', coin:3, hospital:true, wall:'#eef6ff', floor:'#dfe6ee'},
     {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Bora se divertir! 🎡', coin:6, funpark:true, wall:'#bfe3ff', floor:'#9ccf7a'},
     {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hora do lanche! 🍔', coin:4, diner:true, wall:'#fff0c2', floor:'#caa46e'},
   ];
@@ -1213,6 +1213,9 @@ function phaseCity(){
   const FLOORY=H*0.80;
   const FUN={ wheel:{x:W*0.30,y:284,r:104}, co:{x:W*0.52,y:560,rx:W*0.40,ry:64} };
   let ride=null, wheelAng=0, coAng=0, rideStart=0;   // ride: null|'wheel'|'coaster'
+  // ---- hospital (Hospital): doctor, desk+computer, patient chairs, exam bed ----
+  const HOSP={ bed:{x:W/2,y:140}, doctor:{x:W/2,y:280}, desk:{x:W/2,y:356}, chairs:[{x:W*0.35,y:486},{x:W*0.65,y:486}] };
+  let checked=false;
   // ---- school (Escola): 5 desks with students, a board and a teacher ----
   const SCHOOL={ board:{x:W/2,y:120,w:300,h:92}, teacher:{x:W*0.20,y:214} };
   let desks=[], studied=false;
@@ -1228,6 +1231,7 @@ function phaseCity(){
     else if(p.diner){ A.x=W/2; A.y=H-150; initDiner(); }
     else if(p.home){ A.x=W/2; A.y=H-150; homeAct='none'; }
     else if(p.school){ A.x=W/2; A.y=H-150; initSchool(); }
+    else if(p.hospital){ A.x=W/2; A.y=H-150; homeAct='none'; checked=false; }
     else if(p.funpark){ A.x=W/2; A.y=H-150; ride=null; wheelAng=0; coAng=0; }
     else { A.x=W/2; A.y=170; }
     addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
@@ -1253,6 +1257,10 @@ function phaseCity(){
         for(const d of desks){ if(d.npc===-1 && inRect(x,y,{x:d.x,y:d.y,w:96,h:84})){ homeAct='sit'; A.x=d.x; A.y=d.y-8; A.vx=A.vy=0;
           if(!studied){ studied=true; addCoins(3); } toast('Estudando! 📚'); Sound.sfx('blip'); return; } }
         if(inRect(x,y,{x:SCHOOL.board.x,y:SCHOOL.board.y,w:SCHOOL.board.w,h:SCHOOL.board.h})){ toast('A professora ensinou algo novo! 🍎'); Sound.sfx('blip'); return; }
+      }
+      if(inside.hospital){
+        for(const ch of HOSP.chairs){ if(inRect(x,y,{x:ch.x,y:ch.y,w:74,h:84})){ homeAct='sit'; A.x=ch.x; A.y=ch.y-8; A.vx=A.vy=0;
+          if(!checked){ checked=true; addCoins(3); } toast('Consulta: você está ótimo! 🩺'); Sound.sfx('blip'); return; } }
       }
       if(inside.funpark && !ride){
         if(Math.hypot(x-FUN.wheel.x,y-FUN.wheel.y) < FUN.wheel.r+24){ ride='wheel'; rideStart=wheelAng; toast('Subiu na roda-gigante! 🎡'); Sound.sfx('blip'); return; }
@@ -1292,7 +1300,7 @@ function phaseCity(){
       if(inside){                              // ===== generic interior / market / house =====
         if(jumpQueued){ jumpQueued=false; leave(); return; }
         const ax=readAxis();
-        if((inside.home||inside.school) && homeAct!=='none'){   // seated/lying: move to get up
+        if((inside.home||inside.school||inside.hospital) && homeAct!=='none'){   // seated/lying: move to get up
           if(ax.x||ax.y) homeAct='none'; else return;
         }
         A.vx+=ax.x*0.9; A.vy+=ax.y*0.9;
@@ -1318,6 +1326,7 @@ function phaseCity(){
       if(inside && inside.diner){ drawDiner(inside, A, DOOR, menu, seats, cart, floaters, dinerClerk, t); return; }
       if(inside && inside.home){ drawHouse(inside, A, DOOR, HOME, homeAct, t); return; }
       if(inside && inside.school){ drawSchool(inside, A, DOOR, SCHOOL, desks, homeAct, t); return; }
+      if(inside && inside.hospital){ drawHospital(inside, A, DOOR, HOSP, homeAct, t); return; }
       if(inside && inside.funpark){ drawFunpark(inside, A, DOOR, FUN, FLOORY, ride, wheelAng, coAng, t); return; }
       if(inside){ drawCityInterior(inside, A, DOOR); return; }
       const ox=-cam.x, oy=-cam.y;
@@ -1668,6 +1677,63 @@ function drawSchool(p,A,DOOR,SCHOOL,desks,act,t){
   vignette(0.30);
   banner('🏫 Escola');
   hint('Toque na sua mesa para estudar 📚 · 🚪/⤴ sai');
+}
+// a character wearing a doctor's white coat + stethoscope
+function drawDoctor(x,y,def){
+  drawChar(def, x, y, 1, 1, 0, null);
+  ctx.fillStyle='#ffffff'; ctx.strokeStyle='#d7dee6'; ctx.lineWidth=1.5;
+  rrect(x-13,y+1,26,30,5); ctx.fill(); ctx.stroke();          // white coat
+  ctx.strokeStyle='#3a4a5a'; ctx.lineWidth=2;                  // stethoscope
+  ctx.beginPath(); ctx.moveTo(x-6,y-2); ctx.quadraticCurveTo(x,y+15,x+5,y-2); ctx.stroke();
+  ctx.fillStyle='#9aa7b3'; ctx.beginPath(); ctx.arc(x+5,y+14,3.4,0,7); ctx.fill();
+  ctx.fillStyle='#e23b3b'; ctx.fillRect(x-11,y+6,7,2.4); ctx.fillRect(x-8.3,y+3.3,2.4,7); // red cross
+}
+// doctor's office: doctor in a chair, desk+computer, 2 patient chairs, exam bed
+function drawHospital(p,A,DOOR,HOSP,act,t){
+  ctx.fillStyle=p.wall||'#eef6ff'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=p.floor||'#dfe6ee'; ctx.fillRect(0,H*0.62,W,H*0.38);
+  ctx.fillStyle='rgba(0,0,0,.05)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.62,2,H*0.38);
+  // red cross sign on the wall
+  ctx.fillStyle='#e23b3b'; ctx.fillRect(W-78,64,34,11); ctx.fillRect(W-67,53,11,34);
+  // ===== exam bed (balcão com colchão) behind the doctor =====
+  const bd=HOSP.bed;
+  ctx.fillStyle='rgba(0,0,0,.10)'; ctx.beginPath(); ctx.ellipse(bd.x,bd.y+34,120,9,0,0,7); ctx.fill();
+  ctx.fillStyle='#b9c2cb'; rrect(bd.x-118,bd.y+6,236,34,6); ctx.fill();          // counter / balcão
+  ctx.fillStyle='#9aa6b0'; ctx.fillRect(bd.x-118,bd.y+34,236,6);
+  ctx.fillStyle='#eef2f7'; rrect(bd.x-112,bd.y-16,224,26,8); ctx.fill();         // mattress (colchão)
+  ctx.fillStyle='#9fd0ff'; rrect(bd.x-112,bd.y-16,224,9,8); ctx.fill();          // sheet
+  ctx.fillStyle='#ffffff'; rrect(bd.x-106,bd.y-12,46,20,5); ctx.fill();          // pillow
+  ctx.fillStyle='#f4f7fb'; rrect(bd.x+70,bd.y-22,16,28,3); ctx.fill();           // paper roll
+  // ===== doctor in his chair =====
+  const dc=HOSP.doctor;
+  ctx.fillStyle='#5b8cff'; rrect(dc.x-16,dc.y-34,32,16,4); ctx.fill();           // chair back
+  ctx.fillStyle='#3f6fd6'; rrect(dc.x-16,dc.y-40,32,8,4); ctx.fill();
+  drawDoctor(dc.x, dc.y-6, CHARS[(charSel+2)%CHARS.length]);
+  // ===== desk with a computer (in front of the doctor) =====
+  const dk=HOSP.desk;
+  ctx.fillStyle='rgba(0,0,0,.10)'; ctx.beginPath(); ctx.ellipse(dk.x,dk.y+26,84,8,0,0,7); ctx.fill();
+  ctx.fillStyle='#b3884f'; rrect(dk.x-78,dk.y,156,24,5); ctx.fill();             // desktop
+  ctx.fillStyle='#9a6a3a'; ctx.fillRect(dk.x-72,dk.y+22,8,20); ctx.fillRect(dk.x+64,dk.y+22,8,20);
+  ctx.fillStyle='#2b2f37'; rrect(dk.x-28,dk.y-32,56,36,4); ctx.fill();           // monitor
+  ctx.fillStyle='#7fd0ff'; rrect(dk.x-24,dk.y-28,48,28,2); ctx.fill();           // screen
+  ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fillRect(dk.x-24,dk.y-28,18,28);
+  ctx.fillStyle='#444'; rrect(dk.x-6,dk.y+2,12,5,1); ctx.fill();                 // stand
+  ctx.fillStyle='#d8dde3'; rrect(dk.x-22,dk.y+8,44,9,2); ctx.fill();             // keyboard
+  // ===== 2 patient chairs (in front of the desk) =====
+  HOSP.chairs.forEach(ch=>{ ctx.fillStyle='#7bd88f'; rrect(ch.x-16,ch.y-6,32,18,5); ctx.fill();
+    ctx.fillStyle='#5fae57'; rrect(ch.x-16,ch.y-22,32,18,5); ctx.fill();
+    ctx.fillStyle='#4e9a48'; ctx.fillRect(ch.x-13,ch.y+10,6,16); ctx.fillRect(ch.x+7,ch.y+10,6,16); });
+  // hero: seated at a patient chair, or walking
+  if(act==='sit') drawChar(CHARS[charSel], A.x, A.y-14, 0.85, 1, 0, null);
+  else drawRoamer(A,0,0);
+  // door
+  ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-34,DOOR.y-60,68,118,8); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(DOOR.x-28,DOOR.y-54,56,106,6); ctx.fill();
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(DOOR.x+16,DOOR.y,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('SAIR 🚪',DOOR.x,DOOR.y+70);
+  vignette(0.30);
+  banner('🏥 Hospital');
+  hint('Toque numa cadeira para a consulta 🩺 · 🚪/⤴ sai');
 }
 // interior mini-scene of a city place
 function drawCityInterior(p, A, DOOR){
