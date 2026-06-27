@@ -69,6 +69,12 @@
   }
   #skipBtn.hidden{ display:none; }
   #hud.hidden{ display:none; }
+  .iconBtn{ position:absolute; top:40px; z-index:7; width:42px; height:42px; border-radius:50%;
+    background:rgba(0,0,0,.4); border:1px solid #ffffff44; color:#fff; font-size:20px;
+    cursor:pointer; pointer-events:auto; display:flex; align-items:center; justify-content:center; }
+  .iconBtn.hidden{ display:none; }
+  #muteBtn{ left:12px; }
+  #wardrobeBtn{ right:12px; }
   /* Roblox-style touch controls */
   #touch{ position:absolute; inset:0; z-index:6; pointer-events:none; }
   #touch.hidden{ display:none; }
@@ -108,6 +114,12 @@
     display:flex; flex-direction:column; align-items:center; gap:2px; transition:.15s; }
   .outCard .ce{ font-size:24px; } .outCard .cn{ font-size:10px; }
   .outCard.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); }
+  #modeRow{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; width:100%; max-width:340px; }
+  .modeCard{ pointer-events:auto; cursor:pointer; background:rgba(255,255,255,.08);
+    border:2px solid rgba(255,255,255,.18); border-radius:14px; padding:10px 4px;
+    display:flex; flex-direction:column; align-items:center; gap:3px; transition:.15s; }
+  .modeCard .ce{ font-size:30px; } .modeCard .cn{ font-size:13px; font-weight:bold; }
+  .modeCard.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); transform:translateY(-2px); }
 </style>
 </head>
 <body>
@@ -121,6 +133,8 @@
 
   <div id="toast"></div>
   <button id="skipBtn" class="hidden">Pular ▶</button>
+  <button id="muteBtn" class="hidden iconBtn">🔊</button>
+  <button id="wardrobeBtn" class="hidden iconBtn">👕</button>
 
   <!-- Roblox-style touch controls (free-roam phases) -->
   <div id="touch" class="hidden">
@@ -145,6 +159,11 @@
     <div id="charGrid"></div>
     <div class="wardrobe-label">👕 Guarda-roupa</div>
     <div id="outfitGrid"></div>
+    <div class="wardrobe-label" id="modeLabel">🎮 Modo de jogo</div>
+    <div id="modeRow">
+      <div class="modeCard sel" data-mode="adventure"><div class="ce">🗺️</div><div class="cn">Aventura</div></div>
+      <div class="modeCard" data-mode="life"><div class="ce">🏙️</div><div class="cn">Modo Vida</div></div>
+    </div>
     <button class="btn" id="charBtn">Confirmar</button>
   </div>
 
@@ -204,6 +223,32 @@ function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
 let toastT=0;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1100); }
+
+// ---------- audio: synthesised music + SFX (no external files) ----------
+const Sound = (()=>{
+  let ac=null, muted=false, timer=null, step=0;
+  function ensure(){ if(!ac){ try{ ac=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; } }
+    if(ac.state==='suspended') ac.resume(); }
+  function tone(freq,dur,type,vol,when){ if(!ac||muted||!freq) return; const t0=when||ac.currentTime;
+    const o=ac.createOscillator(), g=ac.createGain(); o.type=type||'sine'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,t0); g.gain.linearRampToValueAtTime(vol,t0+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0+dur+0.03); }
+  function sfx(name){ ensure(); if(!ac||muted) return; const n=ac.currentTime;
+    if(name==='collect'){ tone(660,0.08,'triangle',0.2,n); tone(990,0.10,'triangle',0.18,n+0.06); }
+    else if(name==='jump'){ tone(300,0.09,'square',0.12,n); tone(540,0.08,'square',0.10,n+0.05); }
+    else if(name==='win'){ [523,659,784,1047].forEach((f,i)=>tone(f,0.20,'triangle',0.2,n+i*0.11)); }
+    else if(name==='lose'){ tone(380,0.22,'sawtooth',0.16,n); tone(200,0.32,'sawtooth',0.16,n+0.14); }
+    else if(name==='blip'){ tone(720,0.07,'triangle',0.16,n); }
+    else if(name==='click'){ tone(820,0.05,'square',0.1,n); } }
+  const MEL=[523,0,659,784,0,659,523,0, 587,0,698,880,0,698,587,0,
+             523,0,659,784,880,784,659,587, 523,0,392,0,523,0,0,0];
+  function tick(){ if(!ac||muted) return; const f=MEL[step++%MEL.length]; if(f) tone(f/2,0.30,'sine',0.05); }
+  function start(){ ensure(); if(!timer && !muted) timer=setInterval(tick,300); }
+  function stop(){ if(timer){ clearInterval(timer); timer=null; } }
+  function toggle(){ muted=!muted; if(muted) stop(); else start(); return !muted; }
+  return { ensure, sfx, start, stop, toggle, get on(){ return !muted; } };
+})();
 
 // ---------- game state ----------
 const PHASES = [
@@ -281,6 +326,15 @@ const OUTFITS=[
     ctx.beginPath(); ctx.ellipse(0,-2,12,4.2,0,0,7); ctx.fill(); ctx.stroke();
     ctx.fillRect(face*6-2.5,-2,5,13); ctx.strokeRect(face*6-2.5,-2,5,13);
     ctx.fillStyle='#fff'; for(let k=0;k<3;k++) ctx.fillRect(face*6-2.5, 8-k*4, 5,1.4); } },
+  {name:'Flor', emoji:'🌸', draw:(face)=>{ ctx.save(); ctx.translate(-11,-30);
+    ctx.fillStyle='#ff8fbf'; for(let k=0;k<5;k++){ const a=k*2*Math.PI/5; ctx.beginPath(); ctx.ellipse(Math.cos(a)*4,Math.sin(a)*4,3,3.6,a,0,7); ctx.fill(); }
+    ctx.fillStyle='#ffe06b'; ctx.beginPath(); ctx.arc(0,0,2.4,0,7); ctx.fill(); ctx.restore(); } },
+  {name:'Festa', emoji:'🎉', draw:(face)=>{ ctx.fillStyle='#4ec0ff'; ctx.strokeStyle='#2a8fd0'; ctx.lineWidth=1.4; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(-9,-31); ctx.lineTo(9,-31); ctx.lineTo(0,-54); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ffd34d'; for(let k=0;k<3;k++){ ctx.beginPath(); ctx.arc(-4+k*4,-37+k*2,1.6,0,7); ctx.fill(); }
+    ctx.fillStyle='#ff5b6b'; ctx.beginPath(); ctx.arc(0,-55,2.4,0,7); ctx.fill(); } },
+  {name:'Auréola', emoji:'😇', draw:(face)=>{ ctx.strokeStyle='#ffe06b'; ctx.lineWidth=2.6; ctx.shadowColor='#ffe06b'; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.ellipse(0,-39,10,3.4,0,0,7); ctx.stroke(); ctx.shadowBlur=0; } },
 ];
 let outfitSel=0;
 let pieces = 0;      // amulet pieces collected
@@ -289,6 +343,11 @@ let game = null;     // active phase object {update, draw, input}
 let keys = {};
 let pointer = {down:false, x:0, y:0};
 let mouse = {x:W/2, y:H/2};   // last hover position (for scenery parallax)
+let paused = false;           // true while the in-game wardrobe is open
+let inGameWardrobe = false;   // wardrobe opened mid-phase (resume instead of restart)
+let gameMode = 'adventure';   // 'adventure' | 'life'
+let lifeMode = false;         // currently in the city life mode
+let currentRoam = false;      // does the active scene use the joystick?
 // scenery offset from mouse: depth ~ how far that layer reacts (px per half-screen)
 function par(depth){ return { x:(mouse.x-W/2)/(W/2)*depth, y:(mouse.y-H/2)/(H/2)*depth }; }
 
@@ -358,7 +417,9 @@ function makeCam(worldW,worldH){
 // ---------- screen flow ----------
 const SCREENS=['startScreen','charScreen','introScreen','winScreen','loseScreen','finalScreen'];
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
-  $('touch').classList.add('hidden'); }     // hide joystick whenever a menu is up
+  $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
+  $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
+  if(!paused) Sound.stop(); }
 function hideScreens(){ SCREENS.forEach(s=> $(s).classList.add('hidden')); }
 
 // build the amulet HUD gems (one per phase)
@@ -378,6 +439,8 @@ function updateAmulet(){
     card.innerHTML='<div class="ce">'+o.emoji+'</div><div class="cn">'+o.name+'</div>';
     card.onclick=()=>{ outfitSel=i; document.querySelectorAll('.outCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
     og.appendChild(card); });
+  document.querySelectorAll('.modeCard').forEach(card=>{ card.onclick=()=>{ gameMode=card.dataset.mode;
+    document.querySelectorAll('.modeCard').forEach(e=>e.classList.toggle('sel', e===card)); }; });
 })();
 function openCharSelect(){ show('charScreen'); }
 
@@ -401,35 +464,55 @@ function intro(){
   show('introScreen');
 }
 function beginPhase(){
-  hideScreens();
+  hideScreens(); paused=false; lifeMode=false; currentRoam=PHASES[phase].roam;
   // free-roam phases get the Roblox-style joystick + jump
   $('touch').classList.toggle('hidden', !PHASES[phase].roam);
+  $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
+  Sound.start();
   game = makePhase(phase);
 }
+// ----- Life mode: free-roam city, no win/lose, just explore -----
+function startLife(){
+  hideScreens(); paused=false; lifeMode=true; currentRoam=true;
+  $('hud').classList.add('hidden');     // no amulet pieces in life mode
+  $('touch').classList.remove('hidden');
+  $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
+  Sound.start();
+  game = phaseCity();
+}
 function losePhase(msg){
-  game=null;
+  game=null; Sound.sfx('lose'); Sound.stop();
   $('loseText').textContent = msg || 'O desafio venceu desta vez.';
   show('loseScreen');
 }
 function winPhase(){
-  game=null;
+  game=null; Sound.sfx('win'); Sound.stop();
   pieces++;
   updateAmulet();
   $('winText').textContent = `Você recuperou ${GEM_EMOJI[phase]} o pedaço ${pieces} de ${TOTAL} do Amuleto Dourado!`;
   show('winScreen');
 }
+// open/close the in-game wardrobe (pauses the phase, then resumes it)
+function openWardrobeInGame(){ paused=true; inGameWardrobe=true; Sound.sfx('click'); show('charScreen'); }
+function closeWardrobeResume(){ inGameWardrobe=false; paused=false; hideScreens();
+  $('touch').classList.toggle('hidden', !currentRoam);
+  $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden'); Sound.start(); }
 function nextAfterWin(){
   if(pieces>=TOTAL){ show('finalScreen'); confetti.start(); }
   else { phase++; intro(); }
 }
 
-$('startBtn').onclick = openCharSelect;
-$('charBtn').onclick  = playIntroStory;
+$('startBtn').onclick = ()=>{ Sound.ensure(); Sound.sfx('click'); openCharSelect(); };
+$('charBtn').onclick  = ()=>{ Sound.sfx('click');
+  if(inGameWardrobe){ closeWardrobeResume(); return; }
+  if(gameMode==='life') startLife(); else playIntroStory(); };
 $('introBtn').onclick = beginPhase;
 $('winBtn').onclick   = nextAfterWin;
 $('loseBtn').onclick  = beginPhase;   // retry same phase
-$('finalBtn').onclick = ()=>{ confetti.stop(); $('hud').classList.add('hidden'); show('startScreen'); };
+$('finalBtn').onclick = ()=>{ confetti.stop(); Sound.stop(); $('hud').classList.add('hidden'); show('startScreen'); };
 $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
+$('wardrobeBtn').onclick = openWardrobeInGame;
+$('muteBtn').onclick  = ()=>{ const on=Sound.toggle(); $('muteBtn').textContent = on?'🔊':'🔇'; };
 
 // ======================================================
 //  PHASES
@@ -535,13 +618,13 @@ function drawBear(x,y,s=1,face=1,bob=0,run=null){ drawChar(CHARS[charSel], x,y,s
 function mkRoamer(x,y){ return {x,y,vx:0,vy:0,r:23,face:1,walk:0,hopY:0,hopV:0,onGround:true,sq:0,moving:0}; }
 function roamStep(A,WW,WH,slippery){
   const ax=readAxis();
-  const acc = slippery?0.20:0.66, fric = slippery?0.955:0.78, SPEED=4.7;
+  const acc = slippery?0.28:0.85, fric = slippery?0.955:0.80, SPEED=6.3;
   A.vx+=ax.x*acc; A.vy+=ax.y*acc; A.vx*=fric; A.vy*=fric;
   const sp=Math.hypot(A.vx,A.vy); if(sp>SPEED){ A.vx*=SPEED/sp; A.vy*=SPEED/sp; }
   A.x=clamp(A.x+A.vx,A.r,WW-A.r); A.y=clamp(A.y+A.vy,A.r,WH-A.r);
   if(Math.abs(A.vx)>0.25) A.face=A.vx>0?1:-1;
   A.moving=Math.hypot(A.vx,A.vy); A.walk+=A.moving*0.17;
-  if(takeJump() && A.onGround){ A.hopV=-8.2; A.onGround=false; A.sq=1.1; }   // stretch on take-off
+  if(takeJump() && A.onGround){ A.hopV=-8.2; A.onGround=false; A.sq=1.1; Sound.sfx('jump'); }   // stretch on take-off
   if(!A.onGround){ A.hopV+=0.55; A.hopY+=A.hopV; if(A.hopY>=0){ A.hopY=0; A.onGround=true; A.sq=-1.0; } } // squash on land
   A.sq*=0.82;
 }
@@ -566,7 +649,7 @@ function phaseCollect(cfg){
   return {
     update(){ t++; if(lost) return;
       roamStep(A,WW,WH,cfg.slippery);
-      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+26){ h.got=true; collected++; toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
+      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+26){ h.got=true; collected++; Sound.sfx('collect'); toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
       haz.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; if(b.x<50||b.x>WW-50)b.vx*=-1; if(b.y<50||b.y>WH-50)b.vy*=-1;
         if(A.onGround && Math.hypot(b.x-A.x,b.y-A.y)<A.r+6){ lost=true; losePhase(cfg.loseMsg); }});
       cam.follow(A.x,A.y,0.11);
@@ -651,7 +734,7 @@ function phaseForest(){
       roamStep(A,WW,WH);
       // honey pickup
       honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+16){
-        h.got=true; collected++; toast('Mel! '+collected+'/'+need); if(collected>=need){ winPhase(); } }});
+        h.got=true; collected++; Sound.sfx('collect'); toast('Mel! '+collected+'/'+need); if(collected>=need){ winPhase(); } }});
       // bees roam and sting (safe while hopping in the air)
       bees.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
         if(b.x<50||b.x>WW-50) b.vx*=-1; if(b.y<50||b.y>WH-50) b.vy*=-1;
@@ -735,6 +818,7 @@ function phaseRiver(){
   newTarget();
   function jump(){
     if(bear.jumping || result) return;
+    Sound.sfx('jump');
     bear.jumping=true; bear.jt=0; bear.fromX=bear.x;
     bear.landX=target.x;
     bear.hit = Math.abs(bear.x - target.x) < target.r+12;   // aligned? -> safe landing
@@ -793,7 +877,7 @@ function phaseRiver(){
           bear.jumping=false;
           if(bear.hit){
             splash(bear.x, target.y+10, 10, 1);   // landing splash
-            count++;
+            Sound.sfx('collect'); count++;
             if(count>=need){ winPhase(); return; }
             bear.x=W/2; bear.y=baseY; newTarget();
           } else {
@@ -908,7 +992,7 @@ function phaseCave(){
     tap(x,y){
       if(state!=='input') return;
       for(let i=0;i<4;i++){ if(Math.hypot(cells[i].x-x,cells[i].y-y)<cells[i].r){
-        flash(i);
+        flash(i); Sound.sfx('blip');
         if(seq[inputIdx]===i){
           inputIdx++;
           if(inputIdx>=seq.length){
@@ -1005,6 +1089,79 @@ function phaseCave(){
            state==='input'?'Sua vez! Repita a ordem': 'Boa!');
       // bear watching at bottom
       drawBear(W/2,H-90,0.8,1);
+    }
+  };
+}
+
+// ===================== LIFE MODE: THE CITY =====================
+function drawBuilding(b,x,y){ if(x<-160||x>W+160||y<-220||y>H+60) return;
+  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+4,b.w*0.5,8,0,0,7); ctx.fill();
+  ctx.fillStyle=b.c; ctx.fillRect(x-b.w/2,y-b.h,b.w,b.h);
+  ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(x-b.w/2,y-b.h,b.w*0.4,b.h);
+  ctx.fillStyle='rgba(0,0,0,.14)'; ctx.fillRect(x-b.w/2,y-b.h,b.w,5);
+  // roof
+  ctx.fillStyle=b.roof; ctx.beginPath(); ctx.moveTo(x-b.w/2-6,y-b.h); ctx.lineTo(x,y-b.h-24); ctx.lineTo(x+b.w/2+6,y-b.h); ctx.closePath(); ctx.fill();
+  // windows
+  ctx.fillStyle='#fff4c2';
+  for(let wy=y-b.h+14; wy<y-24; wy+=24) for(let wx=x-b.w/2+12; wx<x+b.w/2-14; wx+=22){ ctx.fillRect(wx,wy,12,14);
+    ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1; ctx.strokeRect(wx,wy,12,14); }
+  // door
+  ctx.fillStyle='#5a3a1e'; ctx.fillRect(x-9,y-24,18,24);
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(x+5,y-12,1.4,0,7); ctx.fill();
+}
+function drawPlace(p,x,y){ if(x<-170||x>W+170||y<-240||y>H+60) return;
+  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+4,48,9,0,0,7); ctx.fill();
+  ctx.fillStyle='#efe7d4'; ctx.fillRect(x-46,y-80,92,80);
+  ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(x-46,y-80,92,6);
+  ctx.fillStyle='#c0563f'; ctx.beginPath(); ctx.moveTo(x-52,y-80); ctx.lineTo(x,y-108); ctx.lineTo(x+52,y-80); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#bfe2f5'; ctx.fillRect(x-32,y-60,22,22); ctx.fillRect(x+10,y-60,22,22);
+  ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1; ctx.strokeRect(x-32,y-60,22,22); ctx.strokeRect(x+10,y-60,22,22);
+  ctx.fillStyle='#6a4326'; ctx.fillRect(x-13,y-30,26,30);
+  emoji(p.emoji, x, y-92, 30);
+  const w=p.name.length*8+18; ctx.fillStyle='rgba(0,0,0,.6)'; rrect(x-w/2,y-130,w,21,8); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.name,x,y-119);
+}
+function phaseCity(){
+  const WW=2400, WH=2000; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
+  let t=0, lastPlace=null;
+  const places=[
+    {x:380,y:360,emoji:'🏠',name:'Sua Casa'}, {x:1180,y:380,emoji:'🏫',name:'Escola'},
+    {x:2020,y:460,emoji:'🍦',name:'Sorveteria'}, {x:520,y:1180,emoji:'🏪',name:'Mercado'},
+    {x:1320,y:1240,emoji:'🌳',name:'Parque'}, {x:2060,y:1420,emoji:'🏥',name:'Hospital'},
+    {x:880,y:880,emoji:'🎡',name:'Diversões'}, {x:1760,y:980,emoji:'🍔',name:'Lanchonete'},
+  ];
+  const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
+  for(let i=0;i<44;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
+    if(places.some(p=>Math.hypot(p.x-x,p.y-y)<150)) continue;
+    blds.push({x,y,w:rand(72,120),h:rand(74,138),c:`hsl(${(i*47)%360},42%,68%)`,roof:roofs[i%roofs.length]}); }
+  cam.snap(A.x,A.y);
+  function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<72) return p; } return null; }
+  return {
+    update(){ t++; if(paused) return; roamStep(A,WW,WH);
+      const p=nearPlace();
+      if(p && p!==lastPlace){ lastPlace=p; toast('📍 '+p.name); Sound.sfx('blip'); }
+      if(!p) lastPlace=null;
+      cam.follow(A.x,A.y,0.12);
+    },
+    draw(){ const ox=-cam.x, oy=-cam.y;
+      ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
+      // roads (grid)
+      ctx.fillStyle='#6b6f78';
+      for(let gx=0;gx<=WW;gx+=400){ const x=gx+ox; if(x>-30&&x<W+30) ctx.fillRect(x-22,0,44,H); }
+      for(let gy=0;gy<=WH;gy+=400){ const y=gy+oy; if(y>-30&&y<H+30) ctx.fillRect(0,y-22,W,44); }
+      ctx.fillStyle='#ffd34d';   // lane dashes
+      for(let gx=0;gx<=WW;gx+=400){ const x=gx+ox; if(x>-30&&x<W+30) for(let yy=-((cam.y)%30);yy<H;yy+=30) ctx.fillRect(x-2,yy,4,14); }
+      for(let gy=0;gy<=WH;gy+=400){ const y=gy+oy; if(y>-30&&y<H+30) for(let xx=-((cam.x)%30);xx<W;xx+=30) ctx.fillRect(xx,y-2,14,4); }
+      // depth-sorted buildings + places + hero
+      const list=[];
+      blds.forEach(b=> list.push({y:b.y,k:'b',o:b}));
+      places.forEach(p=> list.push({y:p.y,k:'p',o:p}));
+      list.sort((a,b)=>a.y-b.y);
+      for(const d of list){ if(d.k==='b') drawBuilding(d.o,d.o.x+ox,d.o.y+oy); else drawPlace(d.o,d.o.x+ox,d.o.y+oy); }
+      drawRoamer(A,ox,oy);
+      vignette(0.30);
+      banner('🏙️ Modo Vida — explore a cidade');
+      hint('Direcional/WASD para andar · visite os lugares 📍 · 👕 troca a roupa');
     }
   };
 }
@@ -1401,7 +1558,7 @@ const confetti = (()=>{
 function loop(){
   try{
     ctx.clearRect(0,0,W,H);
-    if(game){ game.update(); game.draw(); }
+    if(game){ if(!paused) game.update(); game.draw(); }   // paused: freeze updates, keep last frame
     else { // idle background behind menus
       ctx.fillStyle='#0d1220'; ctx.fillRect(0,0,W,H);
     }
