@@ -1167,7 +1167,7 @@ function phaseCity(){
     {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Bem-vindo ao mercado! 🛒', coin:3, shop:true, wall:'#eef3ff', floor:'#c8b48a'},
     {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true},
     {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Check-up feito, tudo certo! 🩺', coin:3, wall:'#eef6ff', floor:'#cfd6dc', props:['🩺','💊','🛏️','➕']},
-    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Que aventura! 🎡', coin:6, wall:'#ffe7c2', floor:'#d8a86a', props:['🎡','🎠','🎢','🎈','🍿']},
+    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Bora se divertir! 🎡', coin:6, funpark:true, wall:'#bfe3ff', floor:'#9ccf7a'},
     {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hmm, um lanche! 🍔', coin:4, wall:'#fff0c2', floor:'#caa46e', props:['🍔','🍟','🥤','🌭','🍕']},
   ];
   const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
@@ -1202,6 +1202,10 @@ function phaseCity(){
   const HOME={ bed:{x:W*0.70,y:250,w:162,h:92}, sofa:{x:W*0.32,y:H*0.66,w:152,h:72}, tv:{x:W*0.32,y:H*0.66-150} };
   let homeAct='none';   // 'none' | 'bed' | 'sofa' | 'sit'
   function inRect(x,y,r){ return Math.abs(x-r.x)<r.w/2 && Math.abs(y-r.y)<r.h/2; }
+  // ---- amusement park (Diversões): ferris wheel + roller coaster ----
+  const FLOORY=H*0.80;
+  const FUN={ wheel:{x:W*0.30,y:284,r:104}, co:{x:W*0.52,y:560,rx:W*0.40,ry:64} };
+  let ride=null, wheelAng=0, coAng=0, rideStart=0;   // ride: null|'wheel'|'coaster'
   // ---- school (Escola): 5 desks with students, a board and a teacher ----
   const SCHOOL={ board:{x:W/2,y:120,w:300,h:92}, teacher:{x:W*0.20,y:214} };
   let desks=[], studied=false;
@@ -1216,6 +1220,7 @@ function phaseCity(){
     else if(p.icecream){ A.x=W/2; A.y=H-150; initIce(); }
     else if(p.home){ A.x=W/2; A.y=H-150; homeAct='none'; }
     else if(p.school){ A.x=W/2; A.y=H-150; initSchool(); }
+    else if(p.funpark){ A.x=W/2; A.y=H-150; ride=null; wheelAng=0; coAng=0; }
     else { A.x=W/2; A.y=170; }
     addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
   function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
@@ -1239,7 +1244,11 @@ function phaseCity(){
           if(!studied){ studied=true; addCoins(3); } toast('Estudando! 📚'); Sound.sfx('blip'); return; } }
         if(inRect(x,y,{x:SCHOOL.board.x,y:SCHOOL.board.y,w:SCHOOL.board.w,h:SCHOOL.board.h})){ toast('A professora ensinou algo novo! 🍎'); Sound.sfx('blip'); return; }
       }
-      if(!inside.soccer && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
+      if(inside.funpark && !ride){
+        if(Math.hypot(x-FUN.wheel.x,y-FUN.wheel.y) < FUN.wheel.r+24){ ride='wheel'; rideStart=wheelAng; toast('Subiu na roda-gigante! 🎡'); Sound.sfx('blip'); return; }
+        if(Math.abs(x-FUN.co.x)<FUN.co.rx+20 && Math.abs(y-FUN.co.y)<FUN.co.ry+34){ ride='coaster'; rideStart=coAng; toast('Subiu na montanha-russa! 🎢'); Sound.sfx('blip'); return; }
+      }
+      if(!inside.soccer && !ride && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
       if(inside && inside.soccer){            // ===== PARK SOCCER =====
         if(jumpQueued){ jumpQueued=false; leave(); return; }
@@ -1256,6 +1265,18 @@ function phaseCity(){
           else { ball.x=26; ball.vx*=-0.7; } }
         if(ball.x>W-26){ if(ball.y>gTop&&ball.y<gBot){ scoreYou++; addCoins(3); toast('GOOOL! ⚽ +3 🪙'); Sound.sfx('win'); resetBall(); }
           else { ball.x=W-26; ball.vx*=-0.7; } }
+        return;
+      }
+      if(inside && inside.funpark){            // ===== amusement park rides =====
+        if(ride){                              // riding: 2 turns then stop
+          if(ride==='wheel'){ wheelAng+=0.05; if(wheelAng-rideStart>=Math.PI*4){ ride=null; A.x=FUN.wheel.x; A.y=FLOORY-16; addCoins(2); toast('Que volta na roda-gigante! 🎡'); Sound.sfx('collect'); } }
+          else { coAng+=0.06; if(coAng-rideStart>=Math.PI*4){ ride=null; A.x=FUN.co.x; A.y=FUN.co.y+FUN.co.ry+30; addCoins(2); toast('Uhuul, montanha-russa! 🎢'); Sound.sfx('collect'); } }
+          return;
+        }
+        if(jumpQueued){ jumpQueued=false; leave(); return; }
+        const ax=readAxis(); A.vx+=ax.x*0.9; A.vy+=ax.y*0.9;
+        moveActor(A,0,0.8,5,48,W-48,150,FLOORY-10);
+        if(Math.hypot(A.x-DOOR.x,A.y-DOOR.y)<42) leave();
         return;
       }
       if(inside){                              // ===== generic interior / market / house =====
@@ -1285,6 +1306,7 @@ function phaseCity(){
       if(inside && inside.icecream){ drawIce(inside, A, DOOR, flavors, cart, floaters, iceClerk, t); return; }
       if(inside && inside.home){ drawHouse(inside, A, DOOR, HOME, homeAct, t); return; }
       if(inside && inside.school){ drawSchool(inside, A, DOOR, SCHOOL, desks, homeAct, t); return; }
+      if(inside && inside.funpark){ drawFunpark(inside, A, DOOR, FUN, FLOORY, ride, wheelAng, coAng, t); return; }
       if(inside){ drawCityInterior(inside, A, DOOR); return; }
       const ox=-cam.x, oy=-cam.y;
       ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
@@ -1431,6 +1453,51 @@ function drawIce(p,A,DOOR,flavors,cart,floaters,clerk,t){
   vignette(0.30);
   banner('🍦 Sorvetes: '+cart);
   hint('Toque num sabor para comprar 🍦 · 🚪/⤴ sai');
+}
+// amusement park: a ferris wheel and a roller coaster the hero rides
+function drawFunpark(p,A,DOOR,FUN,FLOORY,ride,wheelAng,coAng,t){
+  const sky=ctx.createLinearGradient(0,0,0,FLOORY); sky.addColorStop(0,'#aaddff'); sky.addColorStop(1,'#e6f4ff');
+  ctx.fillStyle=sky; ctx.fillRect(0,0,W,FLOORY);
+  ctx.fillStyle=p.floor||'#9ccf7a'; ctx.fillRect(0,FLOORY,W,H-FLOORY);
+  // bunting flags
+  for(let i=0;i<W/40+1;i++){ ctx.fillStyle=['#ff6b6b','#ffd34d','#7bd88f','#5b8cff'][i%4]; ctx.beginPath();
+    ctx.moveTo(i*40,40); ctx.lineTo(i*40+40,40); ctx.lineTo(i*40+20,62); ctx.closePath(); ctx.fill(); }
+  // ===== roller coaster (drawn first, behind the wheel base) =====
+  const c=FUN.co;
+  ctx.strokeStyle='#b3884f'; ctx.lineWidth=5;
+  for(let i=0;i<8;i++){ const a=i*2*Math.PI/8; const px=c.x+Math.cos(a)*c.rx, py=c.y+Math.sin(a)*c.ry;
+    if(py<FLOORY-2){ ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px,FLOORY); ctx.stroke(); } }
+  ctx.strokeStyle='#6e4a2c'; ctx.lineWidth=12; ctx.beginPath(); ctx.ellipse(c.x,c.y,c.rx,c.ry,0,0,7); ctx.stroke();
+  ctx.strokeStyle='#e0b87a'; ctx.lineWidth=4; ctx.beginPath(); ctx.ellipse(c.x,c.y,c.rx,c.ry,0,0,7); ctx.stroke();
+  const cx=c.x+Math.cos(coAng)*c.rx, cy=c.y+Math.sin(coAng)*c.ry;
+  ctx.fillStyle='#ff5b5b'; ctx.strokeStyle='#b33'; ctx.lineWidth=1.5; rrect(cx-16,cy-11,32,20,5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(cx-9,cy+11,4,0,7); ctx.arc(cx+9,cy+11,4,0,7); ctx.fill();
+  if(ride==='coaster') drawChar(CHARS[charSel], cx, cy-12, 0.6, (Math.cos(coAng)<0?-1:1), 0, null);
+  // ===== ferris wheel =====
+  const w=FUN.wheel;
+  ctx.strokeStyle='#9aa0aa'; ctx.lineWidth=7; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(w.x-54,FLOORY); ctx.lineTo(w.x,w.y); ctx.moveTo(w.x+54,FLOORY); ctx.lineTo(w.x,w.y); ctx.stroke();
+  ctx.strokeStyle='#ff6b6b'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,7); ctx.stroke();
+  ctx.strokeStyle='rgba(255,107,107,.5)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(w.x,w.y,w.r-9,0,7); ctx.stroke();
+  const N=6, gcol=['#ffd34d','#7bd88f','#5b8cff','#ff8fb0','#b98bff','#ff6b6b'];
+  for(let i=0;i<N;i++){ const a=wheelAng + i*2*Math.PI/N + Math.PI/2;
+    const gx=w.x+Math.cos(a)*w.r, gy=w.y+Math.sin(a)*w.r;
+    ctx.strokeStyle='#ffc2c2'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(w.x,w.y); ctx.lineTo(gx,gy); ctx.stroke();
+    ctx.fillStyle=gcol[i]; ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1.5;
+    rrect(gx-13,gy+2,26,18,5); ctx.fill(); ctx.stroke();
+    if(i===0 && ride==='wheel') drawChar(CHARS[charSel], gx, gy+3, 0.55, 1, 0, null);
+  }
+  ctx.fillStyle='#ffce54'; ctx.beginPath(); ctx.arc(w.x,w.y,8,0,7); ctx.fill();
+  // walking hero (when not on a ride)
+  if(!ride) drawRoamer(A,0,0);
+  // door
+  ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-34,DOOR.y-60,68,118,8); ctx.fill();
+  ctx.fillStyle='#7a5230'; rrect(DOOR.x-28,DOOR.y-54,56,106,6); ctx.fill();
+  ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(DOOR.x+16,DOOR.y,4,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('SAIR 🚪',DOOR.x,DOOR.y+70);
+  vignette(0.28);
+  banner(ride ? (ride==='wheel'?'🎡 Roda-gigante!':'🎢 Montanha-russa!') : '🎡 Parque de Diversões');
+  hint(ride ? 'Aproveite a volta! 🎉' : 'Toque na roda-gigante 🎡 ou na montanha-russa 🎢 · 🚪/⤴ sai');
 }
 // house interior with a bed (sleep), sofa (sit) and a TV in front of the sofa
 function drawHouse(p,A,DOOR,HOME,act,t){
