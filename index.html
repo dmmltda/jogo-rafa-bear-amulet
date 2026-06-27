@@ -308,73 +308,81 @@ function phaseForest(){
   };
 }
 
-// ---------- PHASE 2: RIVER (timing jumps between stones) ----------
+// ---------- PHASE 2: RIVER (timing jump onto a moving stone) ----------
 function phaseRiver(){
-  // bear jumps forward across moving stones; press to jump, must land on a stone
-  const lanes = H-200;
-  let bear={x:90,y:H-140,vy:0,onStone:true,prog:0};
-  let stones=[]; let need=7; let scroll=0; let alive=true;
-  // stones laid out going up; create chain
-  let sy=H-140;
-  for(let i=0;i<need+4;i++){ sy-= rand(120,150);
-    stones.push({x:rand(70,W-70), y:sy, r:34, ph:rand(0,6), drift:rand(.4,1.1)*(Math.random()<.5?-1:1)});
+  const need=7;            // successful jumps to win
+  const baseY=H-150;       // where the bear waits
+  const stoneY=H-340;      // height of the moving target stone
+  let count=0;
+  const bear={ x:W/2, y:baseY, jumping:false, jt:0, fromX:W/2, landX:W/2, hit:false };
+  const target={ x:70, y:stoneY, r:48, vx:3 };
+  let result=null;         // 'fall' when the bear missed
+  function newTarget(){
+    const fromLeft = Math.random()<.5;
+    target.x = fromLeft? target.r+10 : W-target.r-10;
+    target.vx = (2.6 + count*0.45) * (fromLeft?1:-1);
   }
-  let target=0;        // index of next stone to reach
-  let jumping=false, jx0=0,jy0=0,jx1=0,jy1=0,jt=0;
-  function startJump(){
-    if(jumping||!alive) return;
-    const s=stones[target];
-    jx0=bear.x; jy0=bear.y; jx1=s.x; jy1=s.y; jt=0; jumping=true;
+  newTarget();
+  function jump(){
+    if(bear.jumping || result) return;
+    bear.jumping=true; bear.jt=0; bear.fromX=bear.x;
+    bear.landX=target.x;
+    bear.hit = Math.abs(bear.x - target.x) < target.r;   // aligned? -> safe landing
+  }
+  function drawStone(x,y,r,glow){
+    ctx.save();
+    if(glow){ ctx.shadowColor='#ffce54'; ctx.shadowBlur=18; }
+    ctx.fillStyle='#76838c'; ctx.beginPath(); ctx.ellipse(x,y+9,r,r*0.5,0,0,7); ctx.fill();
+    ctx.fillStyle=glow?'#dde6ec':'#c2ccd2'; ctx.beginPath(); ctx.ellipse(x,y,r,r*0.45,0,0,7); ctx.fill();
+    if(glow){ ctx.strokeStyle='#ffce54'; ctx.lineWidth=3; ctx.stroke(); }
+    ctx.restore();
   }
   return {
-    key(k){ if(k===' '||k==='ArrowUp') startJump(); },
-    tap(){ startJump(); },
+    key(k){ if(k===' '||k==='ArrowUp') jump(); },
+    tap(){ jump(); },
     update(){
-      // stones drift sideways
-      stones.forEach(s=>{ s.x+=Math.sin((performance.now()/700)+s.ph)*s.drift; });
-      if(jumping){
-        jt+=0.045;
-        const e=Math.min(jt,1);
-        bear.x=jx0+(jx1-jx0)*e;
-        bear.y=jy0+(jy1-jy0)*e - Math.sin(e*Math.PI)*70; // arc
-        if(jt>=1){
-          jumping=false;
-          const s=stones[target];
-          bear.x=s.x; bear.y=s.y-6;
-          if(Math.abs(bear.x - s.x) < s.r){ // landed (always true since we snap) -> reward
-            target++; bear.prog=target;
-            if(target>= need){ winPhase(); }
+      if(!bear.jumping && !result){
+        target.x += target.vx;
+        if(target.x < target.r){ target.x=target.r; target.vx*=-1; }
+        if(target.x > W-target.r){ target.x=W-target.r; target.vx*=-1; }
+      }
+      if(bear.jumping){
+        bear.jt += 0.045;
+        const e=Math.min(bear.jt,1);
+        bear.x = bear.fromX + (bear.landX-bear.fromX)*e;
+        bear.y = baseY + (stoneY-baseY)*e - Math.sin(e*Math.PI)*70;   // arc
+        if(e>=1){
+          bear.jumping=false;
+          if(bear.hit){
+            count++;
+            if(count>=need){ winPhase(); return; }
+            bear.x=W/2; bear.y=baseY; newTarget();
+          } else {
+            result='fall';   // missed -> sink
           }
         }
-      } else {
-        // ride the stone drift
-        if(target< stones.length){ const s=stones[Math.max(0,target-1)]; bear.x=s.x; bear.y=s.y-6; }
       }
-      // camera follow: shift so current stone near bottom third
-      const wantY = H-220;
-      const cur = stones[Math.max(0,target-1)] || stones[0];
-      const targetScroll = wantY - cur.y;
-      scroll += (targetScroll-scroll)*0.08;
+      if(result==='fall'){
+        bear.y += 7;
+        if(bear.y > H+50){ losePhase('O urso caiu na água! 🌊 Pule quando a pedra estiver alinhada.'); }
+      }
     },
     draw(){
-      // river bg
-      const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#123a5e'); g.addColorStop(1,'#0a2238');
+      const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#2a82b8'); g.addColorStop(1,'#0e3a59');
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      // water lines
-      ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=3;
-      for(let y=(scroll%40); y<H; y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-      ctx.save(); ctx.translate(0,scroll);
-      stones.forEach((s,i)=>{
-        ctx.fillStyle = i===target? '#9aa7b0' : (i<target? '#5d6b73':'#7f8c95');
-        ctx.beginPath(); ctx.ellipse(s.x,s.y+8,s.r,s.r*0.5,0,0,7); ctx.fill();
-        ctx.fillStyle = i===target? '#c4d0d8':'#aab6bd';
-        ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*0.45,0,0,7); ctx.fill();
-        if(i===target){ ctx.strokeStyle='#ffce54'; ctx.lineWidth=3; ctx.stroke(); }
-      });
-      drawBear(bear.x,bear.y-14,0.9,1);
-      ctx.restore();
-      banner('Pedras: '+Math.min(target,need)+'/'+need);
-      hint('Toque para pular na pedra brilhante');
+      ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=3;
+      for(let y=130; y<H; y+=44){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      // alignment guide
+      ctx.strokeStyle='rgba(255,206,84,.30)'; ctx.setLineDash([7,9]); ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(W/2,stoneY); ctx.lineTo(W/2,baseY+30); ctx.stroke(); ctx.setLineDash([]);
+      // base stone the bear launches from
+      drawStone(W/2, baseY+18, 52, false);
+      // moving target stone
+      drawStone(target.x, target.y, target.r, true);
+      // bear
+      drawBear(bear.x, bear.y-30, 0.95, 1);
+      banner('Pedras: '+count+'/'+need);
+      hint('Toque quando a pedra brilhante cruzar a linha ⬆️');
     }
   };
 }
@@ -511,12 +519,17 @@ const confetti = (()=>{
 
 // ---------- main loop ----------
 function loop(){
-  ctx.clearRect(0,0,W,H);
-  if(game){ game.update(); game.draw(); }
-  else { // idle background behind menus
-    ctx.fillStyle='#0d1220'; ctx.fillRect(0,0,W,H);
+  try{
+    ctx.clearRect(0,0,W,H);
+    if(game){ game.update(); game.draw(); }
+    else { // idle background behind menus
+      ctx.fillStyle='#0d1220'; ctx.fillRect(0,0,W,H);
+    }
+    confetti.draw();
+  }catch(err){
+    // never let a single bad frame freeze the whole game on a blank screen
+    console.error('frame error:', err);
   }
-  confetti.draw();
   requestAnimationFrame(loop);
 }
 loop();
