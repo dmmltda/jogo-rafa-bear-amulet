@@ -90,6 +90,16 @@
     cursor:pointer; user-select:none;
   }
   #jumpBtn:active{ transform:translateY(4px); box-shadow:0 1px 0 #2f6f9e; }
+  /* character select */
+  #charGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; width:100%; max-width:340px; }
+  .charCard{
+    pointer-events:auto; cursor:pointer; background:rgba(255,255,255,.08);
+    border:2px solid rgba(255,255,255,.18); border-radius:14px; padding:10px 4px;
+    display:flex; flex-direction:column; align-items:center; gap:4px; transition:.15s;
+  }
+  .charCard .ce{ font-size:40px; filter:drop-shadow(0 3px 4px #0008); }
+  .charCard .cn{ font-size:13px; font-weight:bold; }
+  .charCard.sel{ border-color:var(--gold); background:rgba(255,206,84,.16); transform:translateY(-3px); }
 </style>
 </head>
 <body>
@@ -98,10 +108,7 @@
 
   <div id="hud" class="hidden">
     <div id="phaseLabel" class="tag">Fase 1</div>
-    <div id="amulet">
-      <div class="gem"></div><div class="gem"></div>
-      <div class="gem"></div><div class="gem"></div>
-    </div>
+    <div id="amulet"></div>
   </div>
 
   <div id="toast"></div>
@@ -116,12 +123,19 @@
   <!-- START -->
   <div class="screen" id="startScreen">
     <div class="bear-emoji">🐻</div>
-    <h1>Urso &amp; o Amuleto</h1>
-    <p>Bartolomeu, o urso, perdeu o Amuleto Dourado em <b>4 pedaços</b>.
-       Complete o desafio de cada fase para recuperar cada pedaço e
-       <b>reconstruir o amuleto</b>!</p>
+    <h1>Herói &amp; o Amuleto</h1>
+    <p>O Amuleto Dourado foi despedaçado e seus pedaços se espalharam por
+       <b>9 terras</b>. Complete o desafio de cada fase para recuperar cada
+       pedaço e <b>reconstruir o amuleto</b>!</p>
     <button class="btn" id="startBtn">Começar aventura</button>
-    <p class="small">Começa com a história de como o amuleto foi despedaçado.<br>Toque / clique ou use as setas e a barra de espaço.</p>
+    <p class="small">Escolha seu herói, assista à história e parta na aventura.<br>Toque / clique ou use as setas e a barra de espaço.</p>
+  </div>
+
+  <!-- CHARACTER SELECT -->
+  <div class="screen hidden" id="charScreen">
+    <h2>Escolha seu herói</h2>
+    <div id="charGrid"></div>
+    <button class="btn" id="charBtn">Confirmar</button>
   </div>
 
   <!-- PHASE INTRO -->
@@ -183,16 +197,46 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 
 // ---------- game state ----------
 const PHASES = [
-  { tag:'Fase 1 · A Floresta', icon:'🌲', title:'Mel da Floresta',
-    text:'Explore a floresta livremente e colete 8 potes de mel 🍯, fugindo das abelhas 🐝. Use o direcional/WASD para andar em qualquer direção e o botão ⤴ para pular. A câmera segue o urso!' },
-  { tag:'Fase 2 · O Rio', icon:'🌊', title:'A Travessia',
-    text:'Pule de pedra em pedra para atravessar o rio. Toque/seta para pular no tempo certo. Caia na água e acabou!' },
-  { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória',
-    text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.' },
-  { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche',
-    text:'Escale a montanha até o cume! Use o direcional/WASD para subir e desviar das rochas 🪨 da avalanche, e o botão ⤴ para pular. A câmera sobe junto com o urso.' },
+  { tag:'Fase 1 · A Floresta', icon:'🌲', title:'Mel da Floresta', roam:true,
+    text:'Explore a floresta livremente e colete 8 potes de mel 🍯, fugindo das abelhas 🐝. Use o direcional/WASD para andar em qualquer direção e o botão ⤴ para pular. A câmera segue o herói!',
+    build:()=>phaseForest() },
+  { tag:'Fase 2 · O Rio', icon:'🌊', title:'A Travessia', roam:false,
+    text:'Pule de pedra em pedra para atravessar o rio. Toque/seta para pular no tempo certo. Caia na água e acabou!',
+    build:()=>phaseRiver() },
+  { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória', roam:false,
+    text:'Memorize a sequência que os cristais acendem e repita tocando na ordem certa. 4 rodadas para vencer.',
+    build:()=>phaseCave() },
+  { tag:'Fase 4 · A Montanha', icon:'⛰️', title:'A Avalanche', roam:true,
+    text:'Escale a montanha até o cume! Use o direcional/WASD para subir e desviar das rochas 🪨 da avalanche, e o botão ⤴ para pular.',
+    build:()=>phaseClimb(CFG_MOUNTAIN) },
+  { tag:'Fase 5 · O Deserto', icon:'🏜️', title:'Oásis Perdido', roam:true,
+    text:'Atravesse o deserto e colete 8 cantis de água 💧, fugindo dos escorpiões 🦂. Direcional/WASD para andar, ⤴ para pular.',
+    build:()=>phaseCollect(CFG_DESERT) },
+  { tag:'Fase 6 · A Praia', icon:'🏖️', title:'Tesouros do Mar', roam:true,
+    text:'Na praia, colete 8 conchas 🐚 fugindo dos caranguejos 🦀. Direcional/WASD para andar, ⤴ para pular.',
+    build:()=>phaseCollect(CFG_BEACH) },
+  { tag:'Fase 7 · O Vulcão', icon:'🌋', title:'Subida Ardente', roam:true,
+    text:'Escale o vulcão até o topo desviando das rochas de lava 🔥! Direcional/WASD para subir, ⤴ para pular.',
+    build:()=>phaseClimb(CFG_VOLCANO) },
+  { tag:'Fase 8 · A Geleira', icon:'❄️', title:'Gelo Escorregadio', roam:true,
+    text:'No gelo escorregadio, colete 8 cristais de gelo 💎 fugindo dos blocos de neve ⛄. Cuidado: o chão desliza!',
+    build:()=>phaseCollect(CFG_ICE) },
+  { tag:'Fase 9 · Castelo nas Nuvens', icon:'☁️', title:'O Último Pedaço', roam:true,
+    text:'No castelo nas nuvens, colete as 8 estrelas ⭐ e recupere o último pedaço do amuleto! Cuidado com as nuvens-relâmpago 🌩️.',
+    build:()=>phaseCollect(CFG_SKY) },
 ];
-const GEM_EMOJI = ['🔶','🔷','🟡','💎'];
+const TOTAL = PHASES.length;
+const GEM_EMOJI = ['🔶','🔷','🟡','💎','🟠','🐚','🔴','❄️','⭐'];
+// ----- selectable heroes -----
+const CHARS=[
+  {name:'Urso',    emoji:'🐻', fur:'#8a5a32', fdark:'#5f3c1f', flight:'#a87a4a', belly:'#c59e68', bellyD:'#9a6f40', muzzle:'#e3c39a', out:'#3c2510', nose:'#241405', ear:'round', earIn:'#7a4a28'},
+  {name:'Coelho',  emoji:'🐰', fur:'#dde0ea', fdark:'#aeb2c2', flight:'#f2f4fa', belly:'#ffffff', bellyD:'#dfe2ec', muzzle:'#ffe2ea', out:'#5b5b6b', nose:'#e07b95', ear:'long', earIn:'#ffc0d0'},
+  {name:'Panda',   emoji:'🐼', fur:'#f3f3f5', fdark:'#cfcfd6', flight:'#ffffff', belly:'#ffffff', bellyD:'#e6e6ec', muzzle:'#ffffff', out:'#2a2a2e', nose:'#1c1c1c', ear:'round', earIn:'#222', earCol:'#222', patch:'#222'},
+  {name:'Raposa',  emoji:'🦊', fur:'#e8743c', fdark:'#bb5022', flight:'#ff9a5a', belly:'#fff1e4', bellyD:'#f0d4bd', muzzle:'#fff1e4', out:'#5a2c12', nose:'#3a2418', ear:'pointy', earIn:'#3a2418'},
+  {name:'Gato',    emoji:'🐱', fur:'#9aa0aa', fdark:'#6f757f', flight:'#b8bdc6', belly:'#e9ecf1', bellyD:'#cfd4dc', muzzle:'#e9ecf1', out:'#3b3f47', nose:'#e07b95', ear:'pointy', earIn:'#ffb3c6'},
+  {name:'Pinguim', emoji:'🐧', fur:'#2b3340', fdark:'#1b212b', flight:'#3b4451', belly:'#f5f6fb', bellyD:'#dfe3ee', muzzle:'#2b3340', out:'#10141b', nose:'#ffae3a', ear:'none', beak:'#ffae3a', bigBelly:true},
+];
+let charSel=0;
 let pieces = 0;      // amulet pieces collected
 let phase = 0;       // current phase index
 let game = null;     // active phase object {update, draw, input}
@@ -266,18 +310,28 @@ function makeCam(worldW,worldH){
 })();
 
 // ---------- screen flow ----------
-function show(id){ ['startScreen','introScreen','winScreen','loseScreen','finalScreen']
-  .forEach(s=> $(s).classList.toggle('hidden', s!==id));
+const SCREENS=['startScreen','charScreen','introScreen','winScreen','loseScreen','finalScreen'];
+function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden'); }     // hide joystick whenever a menu is up
-function hideScreens(){ ['startScreen','introScreen','winScreen','loseScreen','finalScreen']
-  .forEach(s=> $(s).classList.add('hidden')); }
+function hideScreens(){ SCREENS.forEach(s=> $(s).classList.add('hidden')); }
 
+// build the amulet HUD gems (one per phase)
+(function(){ const a=$('amulet'); for(let i=0;i<TOTAL;i++){ const g=document.createElement('div'); g.className='gem'; a.appendChild(g); } })();
 function updateAmulet(){
   document.querySelectorAll('#amulet .gem').forEach((g,i)=> g.classList.toggle('on', i<pieces));
 }
 
+// ----- character select screen -----
+(function(){ const grid=$('charGrid');
+  CHARS.forEach((c,i)=>{ const card=document.createElement('div'); card.className='charCard'+(i===0?' sel':'');
+    card.innerHTML='<div class="ce">'+c.emoji+'</div><div class="cn">'+c.name+'</div>';
+    card.onclick=()=>{ charSel=i; document.querySelectorAll('.charCard').forEach((e,j)=>e.classList.toggle('sel',j===i)); };
+    grid.appendChild(card); });
+})();
+function openCharSelect(){ show('charScreen'); }
+
 function startGame(){ pieces=0; phase=0; updateAmulet(); $('hud').classList.remove('hidden'); intro(); }
-// play the opening story, then start the game
+// after picking a hero -> play the opening story -> start the game
 function playIntroStory(){
   hideScreens();
   $('hud').classList.add('hidden');
@@ -297,8 +351,8 @@ function intro(){
 }
 function beginPhase(){
   hideScreens();
-  // free-roam phases (Floresta & Montanha) get the Roblox-style joystick + jump
-  $('touch').classList.toggle('hidden', !(phase===0 || phase===3));
+  // free-roam phases get the Roblox-style joystick + jump
+  $('touch').classList.toggle('hidden', !PHASES[phase].roam);
   game = makePhase(phase);
 }
 function losePhase(msg){
@@ -310,15 +364,16 @@ function winPhase(){
   game=null;
   pieces++;
   updateAmulet();
-  $('winText').textContent = `Você recuperou ${GEM_EMOJI[phase]} o pedaço ${pieces} de 4 do Amuleto Dourado!`;
+  $('winText').textContent = `Você recuperou ${GEM_EMOJI[phase]} o pedaço ${pieces} de ${TOTAL} do Amuleto Dourado!`;
   show('winScreen');
 }
 function nextAfterWin(){
-  if(pieces>=4){ show('finalScreen'); confetti.start(); }
+  if(pieces>=TOTAL){ show('finalScreen'); confetti.start(); }
   else { phase++; intro(); }
 }
 
-$('startBtn').onclick = playIntroStory;
+$('startBtn').onclick = openCharSelect;
+$('charBtn').onclick  = playIntroStory;
 $('introBtn').onclick = beginPhase;
 $('winBtn').onclick   = nextAfterWin;
 $('loseBtn').onclick  = beginPhase;   // retry same phase
@@ -328,24 +383,18 @@ $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
 // ======================================================
 //  PHASES
 // ======================================================
-function makePhase(i){
-  if(i===0) return phaseForest();
-  if(i===1) return phaseRiver();
-  if(i===2) return phaseCave();
-  return phaseMountain();
-}
+function makePhase(i){ return PHASES[i].build(); }
 
-// shared bear drawer — full-bodied bear -----------------
-// run: number => running cycle phase (legs/arms swing); 'jump' => airborne pose; null/undefined => idle
-function drawBear(x,y,s=1,face=1,bob=0,run=null){
+// shared character drawer (parametrised by a CHARS def) -----------------
+// run: number => walk cycle phase; 'jump' => airborne pose; null => idle
+function drawChar(def,x,y,s=1,face=1,bob=0,run=null){
   ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
-  const FUR='#8a5a32', FUR_D='#6a4322', FUR_L='#a87a4a', SNOUT='#e3c39a', PAD='#5a3a20';
-  const OUT='#3c2510';                          // outline colour
+  const OUT=def.out, FUR=def.fur, FUR_D=def.fdark, FUR_L=def.flight;
   const running = typeof run==='number';
   const jumping = run==='jump';
-  const sw = running ? Math.sin(run)*7 : 0;     // leg/arm swing amount
+  const sw = running ? Math.sin(run)*7 : 0;
   ctx.lineJoin='round';
-  function fluffy(cx,cy,rx,ry,rot,n,amp){       // furry blob outline
+  function fluffy(cx,cy,rx,ry,rot,n,amp){
     ctx.beginPath();
     for(let i=0;i<=n;i++){ const a=i/n*Math.PI*2; const rr=1+Math.sin(a*5)*amp;
       const px=Math.cos(a)*rx*rr, py=Math.sin(a)*ry*rr;
@@ -356,101 +405,202 @@ function drawBear(x,y,s=1,face=1,bob=0,run=null){
   // ground shadow
   ctx.fillStyle='rgba(0,0,0,.22)';
   ctx.beginPath(); ctx.ellipse(0,40, jumping?14:23, 6,0,0,7); ctx.fill();
-  // legs / feet (outlined)
+  // legs / feet
   let lx=-11, rx=11, ly=31, ry=31;
   if(running){ lx=-11+sw; rx=11-sw; ly=31-Math.abs(sw)*0.4; ry=31-Math.abs(sw)*0.4; }
   else if(jumping){ lx=-9; rx=9; ly=26; ry=26; }
   ctx.strokeStyle=OUT; ctx.lineWidth=2.4; ctx.fillStyle=FUR_D;
   ctx.beginPath(); ctx.ellipse(lx,ly,8.5,11,0,0,7); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.ellipse(rx,ry,8.5,11,0,0,7); ctx.fill(); ctx.stroke();
-  ctx.fillStyle=PAD;   // paw pads + tiny claws
+  ctx.fillStyle=def.beak||'#caa86e';   // foot pads
   ctx.beginPath(); ctx.ellipse(lx,ly+4,4.2,5,0,0,7); ctx.fill();
   ctx.beginPath(); ctx.ellipse(rx,ry+4,4.2,5,0,0,7); ctx.fill();
-  ctx.fillStyle='#efe6d0';
-  for(const fx of [lx,rx]) for(let c=-1;c<=1;c++){ ctx.beginPath(); ctx.ellipse(fx+c*3, (fx===lx?ly:ry)+8, 1,1.6,0,0,7); ctx.fill(); }
-  // arms (outlined, fluffy)
+  // ears (behind head) — varies by species
+  function earRound(ex){ ctx.fillStyle=def.earCol||FUR; ctx.strokeStyle=OUT; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.arc(ex,-28,6.5,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=def.earIn||FUR_D; ctx.beginPath(); ctx.arc(ex,-28,3,0,7); ctx.fill(); }
+  function earLong(ex){ ctx.save(); ctx.translate(ex,-30); ctx.rotate(ex<0?-0.18:0.18);
+    ctx.fillStyle=FUR; ctx.strokeStyle=OUT; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.ellipse(0,-12,4.5,14,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=def.earIn; ctx.beginPath(); ctx.ellipse(0,-12,2.2,10,0,0,7); ctx.fill(); ctx.restore(); }
+  function earPointy(ex){ ctx.fillStyle=FUR; ctx.strokeStyle=OUT; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(ex-6,-26); ctx.lineTo(ex+(ex<0?-2:2),-42); ctx.lineTo(ex+6,-26); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=def.earIn; ctx.beginPath(); ctx.moveTo(ex-3,-28); ctx.lineTo(ex,-38); ctx.lineTo(ex+3,-28); ctx.closePath(); ctx.fill(); }
+  if(def.ear==='round'){ earRound(-12); earRound(12); }
+  else if(def.ear==='long'){ earLong(-9); earLong(9); }
+  else if(def.ear==='pointy'){ earPointy(-11); earPointy(11); }
+  // arms
   ctx.fillStyle=furGrad(-2,20,FUR_L,FUR_D); ctx.strokeStyle=OUT; ctx.lineWidth=2.4;
   const aly = jumping? -2 : 9 - sw*0.6 + bob*0.6;
   const ary = jumping? -2 : 9 + sw*0.6 - bob*0.6;
   ctx.beginPath(); ctx.ellipse(-16,aly,6.5,12,0.35,0,7); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.ellipse(16,ary,6.5,12,-0.35,0,7); ctx.fill(); ctx.stroke();
-  // body (fluffy outline + shaded fur)
-  ctx.fillStyle=furGrad(-8,30,'#9a6a3c','#5f3c1f'); ctx.strokeStyle=OUT; ctx.lineWidth=2.6;
+  // body
+  ctx.fillStyle=furGrad(-8,30,FUR_L,FUR_D); ctx.strokeStyle=OUT; ctx.lineWidth=2.6;
   fluffy(0,11,16,19,0,40,0.012); ctx.fill(); ctx.stroke();
-  // belly patch
-  ctx.fillStyle=furGrad(2,26,'#c59e68','#9a6f40');
-  ctx.beginPath(); ctx.ellipse(0,14,9.5,12,0,0,7); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,.10)';        // chest fluff highlight
-  ctx.beginPath(); ctx.ellipse(-2,9,5,7,0,0,7); ctx.fill();
-  // ears (behind head)
-  ctx.fillStyle=FUR; ctx.strokeStyle=OUT; ctx.lineWidth=2.4;
-  ctx.beginPath(); ctx.arc(-12,-28,6.5,0,7); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.arc(12,-28,6.5,0,7); ctx.fill(); ctx.stroke();
-  ctx.fillStyle='#7a4a28';
-  ctx.beginPath(); ctx.arc(-12,-28,3,0,7); ctx.arc(12,-28,3,0,7); ctx.fill();
-  // head (fluffy + shaded)
-  ctx.fillStyle=furGrad(-33,-3,'#9c6c3e','#6a4322'); ctx.strokeStyle=OUT; ctx.lineWidth=2.6;
+  // belly
+  ctx.fillStyle=furGrad(2,26,def.belly,def.bellyD);
+  ctx.beginPath(); ctx.ellipse(0, def.bigBelly?12:14, def.bigBelly?12:9.5, def.bigBelly?16:12,0,0,7); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.10)'; ctx.beginPath(); ctx.ellipse(-2,9,5,7,0,0,7); ctx.fill();
+  // head
+  ctx.fillStyle=furGrad(-33,-3,FUR_L,FUR_D); ctx.strokeStyle=OUT; ctx.lineWidth=2.6;
   fluffy(0,-18,15.5,15,0,38,0.010); ctx.fill(); ctx.stroke();
-  // rim light along the top of the head
-  ctx.strokeStyle='rgba(255,243,214,.45)'; ctx.lineWidth=2.2;
+  ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2.2;
   ctx.beginPath(); ctx.arc(0,-18,14, Math.PI*1.15, Math.PI*1.78); ctx.stroke();
-  // muzzle
-  ctx.fillStyle=SNOUT; ctx.strokeStyle='rgba(60,37,16,.5)'; ctx.lineWidth=1.4;
-  ctx.beginPath(); ctx.ellipse(0,-11,8.5,7,0,0,7); ctx.fill(); ctx.stroke();
-  // brows
-  ctx.strokeStyle='#3c2510'; ctx.lineWidth=1.6; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-9,-24); ctx.lineTo(-3,-25.5); ctx.moveTo(9,-24); ctx.lineTo(3,-25.5); ctx.stroke();
-  // eyes (white + iris + shine)
+  // panda-style eye patches
+  if(def.patch){ ctx.fillStyle=def.patch;
+    ctx.beginPath(); ctx.ellipse(-6*face,-20,4.5,5.5,0.3*face,0,7); ctx.ellipse(6*face,-20,4.5,5.5,-0.3*face,0,7); ctx.fill(); }
+  // muzzle / face mask
+  ctx.fillStyle=def.muzzle; ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.ellipse(0,-11,8.5,7,0,0,7); ctx.fill(); if(!def.patch) ctx.stroke();
+  // eyes
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(-6*face,-20,3,3.4,0,0,7); ctx.ellipse(6*face,-20,3,3.4,0,0,7); ctx.fill();
   ctx.fillStyle='#1c0f04';
   ctx.beginPath(); ctx.arc(-6*face+face*0.6,-19.6,2,0,7); ctx.arc(6*face+face*0.6,-19.6,2,0,7); ctx.fill();
   ctx.fillStyle='#fff';
   ctx.beginPath(); ctx.arc(-6*face+1,-20.6,0.8,0,7); ctx.arc(6*face+1,-20.6,0.8,0,7); ctx.fill();
-  // nose + mouth
-  ctx.fillStyle='#241405';
-  ctx.beginPath(); ctx.ellipse(0,-13.5,2.9,2.1,0,0,7); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(-0.8,-14.2,0.8,0,7); ctx.fill();
-  ctx.strokeStyle='#3c2510'; ctx.lineWidth=1.3; ctx.beginPath();
-  ctx.moveTo(0,-11.5); ctx.quadraticCurveTo(-2.6,-8.5,-4.6,-9.6); ctx.moveTo(0,-11.5);
-  ctx.quadraticCurveTo(2.6,-8.5,4.6,-9.6); ctx.stroke();
+  // nose or beak
+  if(def.beak){ ctx.fillStyle=def.beak; ctx.strokeStyle='rgba(120,70,0,.5)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(-4,-13); ctx.lineTo(4,-13); ctx.lineTo(0,-8); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.fillStyle=def.nose; ctx.beginPath(); ctx.ellipse(0,-13.5,2.9,2.1,0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(-0.8,-14.2,0.8,0,7); ctx.fill();
+    ctx.strokeStyle=OUT; ctx.lineWidth=1.3; ctx.beginPath();
+    ctx.moveTo(0,-11.5); ctx.quadraticCurveTo(-2.6,-8.5,-4.6,-9.6); ctx.moveTo(0,-11.5);
+    ctx.quadraticCurveTo(2.6,-8.5,4.6,-9.6); ctx.stroke();
+  }
   ctx.restore();
+}
+// draw the currently-selected hero
+function drawBear(x,y,s=1,face=1,bob=0,run=null){ drawChar(CHARS[charSel], x,y,s,face,bob,run); }
+
+// ====== shared Roblox-style roamer: free 8-way movement + jump ======
+function mkRoamer(x,y){ return {x,y,vx:0,vy:0,r:23,face:1,walk:0,hopY:0,hopV:0,onGround:true,sq:0,moving:0}; }
+function roamStep(A,WW,WH,slippery){
+  const ax=readAxis();
+  const acc = slippery?0.20:0.66, fric = slippery?0.955:0.78, SPEED=4.7;
+  A.vx+=ax.x*acc; A.vy+=ax.y*acc; A.vx*=fric; A.vy*=fric;
+  const sp=Math.hypot(A.vx,A.vy); if(sp>SPEED){ A.vx*=SPEED/sp; A.vy*=SPEED/sp; }
+  A.x=clamp(A.x+A.vx,A.r,WW-A.r); A.y=clamp(A.y+A.vy,A.r,WH-A.r);
+  if(Math.abs(A.vx)>0.25) A.face=A.vx>0?1:-1;
+  A.moving=Math.hypot(A.vx,A.vy); A.walk+=A.moving*0.17;
+  if(takeJump() && A.onGround){ A.hopV=-8.2; A.onGround=false; A.sq=1.1; }   // stretch on take-off
+  if(!A.onGround){ A.hopV+=0.55; A.hopY+=A.hopV; if(A.hopY>=0){ A.hopY=0; A.onGround=true; A.sq=-1.0; } } // squash on land
+  A.sq*=0.82;
+}
+function drawRoamer(A,ox,oy){
+  const x=A.x+ox, y=A.y+oy-12+A.hopY;
+  const sxc=1 - A.sq*0.14, syc=1 + A.sq*0.18;       // squash & stretch
+  ctx.save(); ctx.translate(x,y); ctx.scale(sxc,syc);
+  const pose = !A.onGround ? 'jump' : (A.moving>0.5 ? A.walk : null);
+  drawChar(CHARS[charSel], 0,0, 1, A.face, 0, pose);
+  ctx.restore();
+}
+
+// ====== generic free-roam "collect N, avoid hazards" phase ======
+function phaseCollect(cfg){
+  const WW=cfg.WW, WH=cfg.WH, need=cfg.need||8;
+  const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
+  let collected=0, t=0, lost=false;
+  const items=[]; for(let i=0;i<need+2;i++) items.push({x:rand(90,WW-90),y:rand(90,WH-90),got:false,ph:rand(0,6)});
+  const haz=[]; for(let i=0;i<cfg.hazN;i++) haz.push({x:rand(120,WW-120),y:rand(120,WH-120),vx:rand(-1,1)*cfg.hazSp,vy:rand(-1,1)*cfg.hazSp,ph:rand(0,6)});
+  const deco = cfg.deco? cfg.deco(WW,WH):[];
+  cam.snap(A.x,A.y);
+  return {
+    update(){ t++; if(lost) return;
+      roamStep(A,WW,WH,cfg.slippery);
+      items.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+16){ h.got=true; collected++; toast(cfg.itemName+' '+collected+'/'+need); if(collected>=need) winPhase(); }});
+      haz.forEach(b=>{ b.x+=b.vx; b.y+=b.vy; if(b.x<50||b.x>WW-50)b.vx*=-1; if(b.y<50||b.y>WH-50)b.vy*=-1;
+        if(A.onGround && Math.hypot(b.x-A.x,b.y-A.y)<A.r+12){ lost=true; losePhase(cfg.loseMsg); }});
+      cam.follow(A.x,A.y,0.11);
+    },
+    draw(){ const ox=-cam.x, oy=-cam.y;
+      cfg.bg(cam,t,ox,oy);
+      // depth-sorted world objects
+      const list=[];
+      deco.forEach(d=> list.push({y:d.y,k:'d',o:d}));
+      items.forEach(h=>{ if(!h.got) list.push({y:h.y,k:'i',o:h}); });
+      haz.forEach(b=> list.push({y:b.y,k:'h',o:b}));
+      list.push({y:A.y,k:'c'});
+      list.sort((a,b)=>a.y-b.y);
+      for(const d of list){
+        if(d.k==='d'){ if(cfg.drawDeco) cfg.drawDeco(d.o, d.o.x+ox, d.o.y+oy, t); }
+        else if(d.k==='i'){ const x=d.o.x+ox, y=d.o.y+oy+Math.sin(t*0.05+d.o.ph)*3;
+          softSun(x,y,24,cfg.glow); emoji(cfg.itemEmoji,x,y,30); }
+        else if(d.k==='h'){ const x=d.o.x+ox, y=d.o.y+oy+Math.sin(t*0.06+d.o.ph)*4; emoji(cfg.hazEmoji,x,y,28); }
+        else drawRoamer(A,ox,oy);
+      }
+      // edge fade beyond the world
+      ctx.fillStyle=cfg.edge||'rgba(0,0,0,.35)';
+      if(ox>0)ctx.fillRect(0,0,ox,H); if(oy>0)ctx.fillRect(0,0,W,oy);
+      if(WW+ox<W)ctx.fillRect(WW+ox,0,W-(WW+ox),H); if(WH+oy<H)ctx.fillRect(0,WH+oy,W,H-(WH+oy));
+      if(cfg.weather) cfg.weather(cam,t);
+      vignette(cfg.vig||0.34);
+      banner(cfg.itemName+': '+collected+'/'+need);
+      hint('Direcional/WASD para andar · ⤴ para pular');
+    }
+  };
+}
+
+// ====== generic vertical-climb phase (reach the summit, dodge rocks) ======
+function phaseClimb(cfg){
+  const WW=W, WH=cfg.WH||2800; const cam=makeCam(WW,WH);
+  const A=mkRoamer(W/2,WH-90); const summitY=cfg.summitY||120;
+  let t=0, lost=false; const rocks=[];
+  const props=cfg.props? cfg.props(WH):[];
+  cam.snap(A.x,A.y);
+  function spawnRock(){ rocks.push({x:rand(30,W-30),y:cam.y-30,r:rand(14,22),v:rand(cfg.rmin||2.8,cfg.rmax||4.6),rot:0}); }
+  return {
+    update(){ t++; if(lost) return;
+      roamStep(A,WW,WH);
+      if(t%(cfg.every||24)===0) spawnRock();
+      for(let i=rocks.length-1;i>=0;i--){ const r=rocks[i]; r.y+=r.v; r.rot+=0.06;
+        if(A.onGround && Math.hypot(r.x-A.x,r.y-A.y)<A.r+r.r-6){ lost=true; losePhase(cfg.loseMsg); return; }
+        if(r.y>cam.y+H+60) rocks.splice(i,1); }
+      if(A.y<=summitY){ winPhase(); return; }
+      cam.follow(A.x,A.y,0.10);
+    },
+    draw(){ const oy=-cam.y;
+      cfg.bg(cam,t,oy,props);
+      for(const r of rocks){ const y=r.y+oy; if(y<-40||y>H+40) continue;
+        ctx.save(); ctx.translate(r.x,y); ctx.rotate(r.rot); cfg.drawRock(r); ctx.restore(); }
+      drawRoamer(A,0,oy);
+      if(cfg.weather) cfg.weather(cam,t);
+      vignette(cfg.vig||0.42);
+      const pct=clamp((WH-90-A.y)/(WH-90-summitY),0,1);
+      ctx.fillStyle='rgba(0,0,0,.3)'; rrect(40,H-30,W-80,12,6); ctx.fill();
+      ctx.fillStyle='#ffce54'; rrect(40,H-30,(W-80)*pct,12,6); ctx.fill();
+      emoji(cfg.icon||'⛰️', W-30, H-24, 22);
+      banner('Subida: '+Math.round(pct*100)+'%');
+      hint('Direcional/WASD para escalar · ⤴ para pular');
+    }
+  };
 }
 
 // ---------- PHASE 1: FOREST (Roblox-style free-roam meadow) ----------
 function phaseForest(){
   const WW=1600, WH=1300;                       // world bigger than the screen
   const cam=makeCam(WW,WH);
-  const bear={ x:WW/2, y:WH/2, vx:0, vy:0, r:24, face:1, walk:0, hopY:0, hopV:0, onGround:true };
-  const SPEED=4.4, ACC=0.6, FRIC=0.80;
+  const A=mkRoamer(WW/2,WH/2);
   let collected=0, need=8, t=0, lost=false;
   const honey=[]; for(let i=0;i<need+2;i++) honey.push({x:rand(90,WW-90), y:rand(90,WH-90), got:false});
   const bees=[];  for(let i=0;i<5;i++) bees.push({x:rand(120,WW-120), y:rand(120,WH-120), vx:rand(-2.2,2.2), vy:rand(-2.2,2.2)});
   const trees=[]; for(let i=0;i<46;i++) trees.push({x:rand(20,WW-20), y:rand(40,WH-20), s:rand(0.8,1.5)});
   const flowers=[]; for(let i=0;i<60;i++) flowers.push({x:rand(0,WW), y:rand(0,WH), c:['#ffe06b','#ff9ad1','#fff','#c08bff'][i%4]});
   const flutter=[]; for(let i=0;i<6;i++) flutter.push({x:rand(0,WW), y:rand(0,WH), ph:rand(0,6), c:['#ff8fb0','#ffd76b','#a3d8ff'][i%3]});
-  cam.snap(bear.x,bear.y);
+  cam.snap(A.x,A.y);
   return {
     update(){
       t++; if(lost) return;
-      const ax=readAxis();
-      bear.vx+=ax.x*ACC; bear.vy+=ax.y*ACC; bear.vx*=FRIC; bear.vy*=FRIC;
-      const sp=Math.hypot(bear.vx,bear.vy); if(sp>SPEED){ bear.vx*=SPEED/sp; bear.vy*=SPEED/sp; }
-      bear.x=clamp(bear.x+bear.vx, bear.r, WW-bear.r);
-      bear.y=clamp(bear.y+bear.vy, bear.r, WH-bear.r);
-      if(Math.abs(bear.vx)>0.2) bear.face=bear.vx>0?1:-1;
-      const moving=Math.hypot(bear.vx,bear.vy);
-      bear.walk += moving*0.16;
-      if(takeJump() && bear.onGround){ bear.hopV=-7.5; bear.onGround=false; }
-      if(!bear.onGround){ bear.hopV+=0.55; bear.hopY+=bear.hopV; if(bear.hopY>=0){ bear.hopY=0; bear.onGround=true; } }
-      bear.moving=moving;
+      roamStep(A,WW,WH);
       // honey pickup
-      honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-bear.x,h.y-bear.y)<bear.r+16){
+      honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-A.x,h.y-A.y)<A.r+16){
         h.got=true; collected++; toast('Mel! '+collected+'/'+need); if(collected>=need){ winPhase(); } }});
       // bees roam and sting (safe while hopping in the air)
       bees.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
         if(b.x<50||b.x>WW-50) b.vx*=-1; if(b.y<50||b.y>WH-50) b.vy*=-1;
-        if(bear.onGround && Math.hypot(b.x-bear.x,b.y-bear.y)<bear.r+11){ lost=true; losePhase('Uma abelha picou o urso! 🐝'); }});
-      cam.follow(bear.x,bear.y,0.11);
+        if(A.onGround && Math.hypot(b.x-A.x,b.y-A.y)<A.r+11){ lost=true; losePhase('Uma abelha picou o herói! 🐝'); }});
+      cam.follow(A.x,A.y,0.11);
     },
     draw(){
       const ox=-cam.x, oy=-cam.y;
@@ -476,7 +626,7 @@ function phaseForest(){
       trees.forEach(tr=> drfrom.push({y:tr.y, kind:'tree', o:tr}));
       honey.forEach(h=>{ if(!h.got) drfrom.push({y:h.y, kind:'honey', o:h}); });
       bees.forEach(b=> drfrom.push({y:b.y, kind:'bee', o:b}));
-      drfrom.push({y:bear.y, kind:'bear'});
+      drfrom.push({y:A.y, kind:'bear'});
       drfrom.sort((a,b)=>a.y-b.y);
       for(const d of drfrom){
         if(d.kind==='tree'){ const x=d.o.x+ox, y=d.o.y+oy; if(x<-80||x>W+80||y<-200||y>H+60) continue;
@@ -485,12 +635,7 @@ function phaseForest(){
         } else if(d.kind==='honey'){ const x=d.o.x+ox, y=d.o.y+oy;
           softSun(x,y,26,'rgba(255,206,84,.6)'); emoji('🍯',x,y,30);
         } else if(d.kind==='bee'){ const x=d.o.x+ox, y=d.o.y+oy; emoji('🐝',x,y,24);
-        } else { // bear
-          const x=bear.x+ox, y=bear.y+oy;
-          ctx.fillStyle='rgba(0,0,0,.20)'; ctx.beginPath(); ctx.ellipse(x,y+16,18,6,0,0,7); ctx.fill();
-          const pose = !bear.onGround ? 'jump' : (bear.moving>0.5 ? bear.walk : null);
-          drawBear(x, y-12+bear.hopY, 1, bear.face, 0, pose);
-        }
+        } else { drawRoamer(A,ox,oy); }
       }
       // butterflies fluttering around the meadow
       flutter.forEach(b=>{ const bx=b.x+Math.sin(t*0.02+b.ph)*40+ox, by=b.y+Math.cos(t*0.017+b.ph)*30+oy;
@@ -809,115 +954,143 @@ function phaseCave(){
   };
 }
 
-// ---------- PHASE 4: MOUNTAIN (Roblox-style free climb to the summit) ----------
-function phaseMountain(){
-  const WW=W, WH=2800;                          // tall world: climb upward
-  const cam=makeCam(WW,WH);
-  const bear={ x:W/2, y:WH-90, vx:0, vy:0, r:22, face:1, walk:0, hopY:0, hopV:0, onGround:true };
-  const SPEED=4.4, ACC=0.6, FRIC=0.82;
-  const summitY=120;                            // reach the top to win
-  let t=0, lost=false; const rocks=[];
-  // decorative props fixed in the world
-  const props=[]; for(let i=0;i<34;i++){ const tree=Math.random()<0.5;
-    props.push({x: tree ? (Math.random()<0.5?rand(24,70):rand(W-70,W-24)) : rand(30,W-30),
-                y:rand(160,WH-120), r:rand(8,16), tree, h:rand(70,120)}); }
-  cam.snap(bear.x,bear.y);
-  function spawnRock(){ rocks.push({x:rand(30,W-30), y:cam.y-30, r:rand(14,22), v:rand(2.8,4.6), rot:0}); }
-  return {
-    update(){
-      t++; if(lost) return;
-      const ax=readAxis();
-      bear.vx+=ax.x*ACC; bear.vy+=ax.y*ACC; bear.vx*=FRIC; bear.vy*=FRIC;
-      const sp=Math.hypot(bear.vx,bear.vy); if(sp>SPEED){ bear.vx*=SPEED/sp; bear.vy*=SPEED/sp; }
-      bear.x=clamp(bear.x+bear.vx, bear.r, W-bear.r);
-      bear.y=clamp(bear.y+bear.vy, bear.r, WH-bear.r);
-      if(Math.abs(bear.vx)>0.2) bear.face=bear.vx>0?1:-1;
-      bear.moving=Math.hypot(bear.vx,bear.vy); bear.walk+=bear.moving*0.16;
-      if(takeJump() && bear.onGround){ bear.hopV=-7.5; bear.onGround=false; }
-      if(!bear.onGround){ bear.hopV+=0.55; bear.hopY+=bear.hopV; if(bear.hopY>=0){ bear.hopY=0; bear.onGround=true; } }
-      // avalanche: rocks tumble down from the top of the view
-      if(t%24===0) spawnRock();
-      for(let i=rocks.length-1;i>=0;i--){ const r=rocks[i]; r.y+=r.v; r.rot+=0.06;
-        if(bear.onGround && Math.hypot(r.x-bear.x,r.y-bear.y)<bear.r+r.r-6){ lost=true; losePhase('Uma rocha atingiu o urso! 🪨'); return; }
-        if(r.y>cam.y+H+60) rocks.splice(i,1);
-      }
-      if(bear.y<=summitY){ winPhase(); return; }
-      cam.follow(bear.x,bear.y,0.10);
-    },
-    draw(){
-      const oy=-cam.y;
-      // night sky (fixed)
-      const g=ctx.createLinearGradient(0,0,0,H);
-      g.addColorStop(0,'#16204a'); g.addColorStop(0.5,'#3f375f'); g.addColorStop(1,'#241a32');
-      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      // aurora
-      ctx.save(); for(let a=0;a<2;a++){ ctx.globalAlpha=0.12; ctx.strokeStyle=a?'#7af0c0':'#9a7af0'; ctx.lineWidth=26;
-        ctx.beginPath(); for(let x=-10;x<=W+10;x+=20){ const y=90+a*40+Math.sin(x*0.012+t*0.01+a)*28; x===-10?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke(); }
-      ctx.restore();
-      // moon + stars (slowly react to climb height)
-      softSun(W*0.78,80,90,'rgba(230,238,255,.55)');
-      ctx.fillStyle='#eef2ff'; ctx.beginPath(); ctx.arc(W*0.78,80,28,0,7); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,.75)';
-      for(let i=0;i<30;i++){ const tw=0.4+0.6*Math.sin(t*0.05+i); ctx.globalAlpha=tw;
-        ctx.fillRect((i*97+31)%W, ((i*53+17)%240), 2,2); }
-      ctx.globalAlpha=1;
-      // snowy slope (the climbable world), scrolls with camera
-      const top=summitY-60+oy, bot=WH+oy;
-      const gnd=ctx.createLinearGradient(0,Math.max(0,top),0,H);
-      gnd.addColorStop(0,'#cfd6f2'); gnd.addColorStop(0.5,'#8e8fc0'); gnd.addColorStop(1,'#3a3354');
-      ctx.fillStyle=gnd; ctx.fillRect(0, top, W, bot-top);
-      // rocky side walls
-      ctx.fillStyle='#2a2440'; ctx.fillRect(0, top, 16, bot-top); ctx.fillRect(W-16, top, 16, bot-top);
-      // slope props: snowy pine trees on the sides + rocks
-      props.forEach(p=>{ const y=p.y+oy; if(y<-160||y>H+30) return;
-        if(p.tree){
-          ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(p.x,y,16,5,0,0,7); ctx.fill();
-          tree(p.x,y,p.h,'#2c5a44');
-          // snow caps on the boughs
-          ctx.fillStyle='rgba(255,255,255,.85)';
-          for(let k=0;k<3;k++){ const ty=y - p.h*0.12 - k*p.h*0.26, w=p.h*(0.34-k*0.07)*0.6;
-            ctx.beginPath(); ctx.moveTo(p.x,ty-p.h*0.30); ctx.lineTo(p.x+w*0.5,ty-p.h*0.12); ctx.lineTo(p.x-w*0.5,ty-p.h*0.12); ctx.closePath(); ctx.fill(); }
-        } else {
-          ctx.fillStyle='#3a3354'; ctx.beginPath(); ctx.arc(p.x,y,p.r,0,7); ctx.fill();
-          ctx.fillStyle='rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(p.x,y-p.r*0.4,p.r*0.6,0,7); ctx.fill();
-        }
-      });
-      // summit platform with the amulet piece glow
-      const sy=summitY+oy;
-      if(sy<H+40){
-        ctx.fillStyle='#eef2ff'; rrect(W/2-70, sy-6, 140, 20, 8); ctx.fill();
-        softSun(W/2, sy-26, 60, 'rgba(255,206,84,.7)'); emoji('🏔️', W/2, sy-30, 30);
-        ctx.fillStyle='#ffce54'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='center';
-        ctx.fillText('CUME', W/2, sy+8);
-      }
-      // falling avalanche rocks
-      for(const r of rocks){ const y=r.y+oy; if(y<-40||y>H+40) continue;
-        ctx.save(); ctx.translate(r.x,y); ctx.rotate(r.rot);
-        ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
-        ctx.fillStyle='#6b5c45'; ctx.beginPath(); ctx.arc(r.r*0.3,r.r*0.3,r.r*0.55,0,7); ctx.fill();
-        ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.5,r.r*0.4,0,7); ctx.fill();
-        ctx.restore();
-      }
-      // falling snow (screen-space)
-      ctx.fillStyle='rgba(255,255,255,.85)';
-      for(let i=0;i<46;i++){ const fx=((i*61)%W)+Math.sin(t*0.03+i)*8; const fy=((i*53 + t*1.8)%H);
-        ctx.beginPath(); ctx.arc(fx,fy,1.6,0,7); ctx.fill(); }
-      // bear
-      const bx=bear.x, by=bear.y+oy;
-      ctx.fillStyle='rgba(0,0,0,.20)'; ctx.beginPath(); ctx.ellipse(bx,by+16,16,5,0,0,7); ctx.fill();
-      const pose = !bear.onGround ? 'jump' : (bear.moving>0.5 ? bear.walk : null);
-      drawBear(bx, by-12+bear.hopY, 1, bear.face, 0, pose);
-      vignette(0.42);
-      // climb progress
-      const pct = clamp((WH-90-bear.y)/(WH-90-summitY),0,1);
-      ctx.fillStyle='rgba(0,0,0,.3)'; rrect(40,H-30,W-80,12,6); ctx.fill();
-      ctx.fillStyle='#ffce54'; rrect(40,H-30,(W-80)*pct,12,6); ctx.fill();
-      emoji('⛰️', W-30, H-24, 22);
-      banner('Subida: '+Math.round(pct*100)+'%');
-      hint('Direcional/WASD para escalar  ·  ⤴ para pular');
-    }
-  };
-}
+// ===================== PHASE CONFIGS =====================
+// helper: tiled top-down ground tufts relative to camera
+function groundTufts(cam,col,step){ ctx.fillStyle=col; const s=step||44;
+  const sx=((cam.x%s)+s)%s, sy=((cam.y%s)+s)%s;
+  for(let x=-sx;x<W;x+=s) for(let y=-sy;y<H;y+=s){ ctx.fillRect(x+6,y+10,4,8); ctx.fillRect(x+24,y+26,4,8); } }
+
+// --- Phase 4: Montanha (climb) ---
+const CFG_MOUNTAIN={ icon:'⛰️', WH:2800, summitY:120, every:24, loseMsg:'Uma rocha atingiu o herói! 🪨',
+  props:(WH)=>{ const p=[]; for(let i=0;i<34;i++){ const tr=Math.random()<0.5;
+    p.push({x: tr?(Math.random()<0.5?rand(24,70):rand(W-70,W-24)):rand(30,W-30), y:rand(160,WH-120), r:rand(8,16), tr, h:rand(70,120)}); } return p; },
+  drawRock:(r)=>{ ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
+    ctx.fillStyle='#6b5c45'; ctx.beginPath(); ctx.arc(r.r*0.3,r.r*0.3,r.r*0.55,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.5,r.r*0.4,0,7); ctx.fill(); },
+  weather:(cam,t)=>{ ctx.fillStyle='rgba(255,255,255,.85)';
+    for(let i=0;i<46;i++){ const fx=((i*61)%W)+Math.sin(t*0.03+i)*8; const fy=((i*53+t*1.8)%H); ctx.beginPath(); ctx.arc(fx,fy,1.6,0,7); ctx.fill(); } },
+  bg:(cam,t,oy,props)=>{ const summitY=120, WH=2800;
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#16204a'); g.addColorStop(0.5,'#3f375f'); g.addColorStop(1,'#241a32');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    ctx.save(); for(let a=0;a<2;a++){ ctx.globalAlpha=0.12; ctx.strokeStyle=a?'#7af0c0':'#9a7af0'; ctx.lineWidth=26;
+      ctx.beginPath(); for(let x=-10;x<=W+10;x+=20){ const y=90+a*40+Math.sin(x*0.012+t*0.01+a)*28; x===-10?ctx.moveTo(x,y):ctx.lineTo(x,y);} ctx.stroke(); } ctx.restore();
+    softSun(W*0.78,80,90,'rgba(230,238,255,.55)'); ctx.fillStyle='#eef2ff'; ctx.beginPath(); ctx.arc(W*0.78,80,28,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.75)'; for(let i=0;i<30;i++){ const tw=0.4+0.6*Math.sin(t*0.05+i); ctx.globalAlpha=tw; ctx.fillRect((i*97+31)%W,((i*53+17)%240),2,2); } ctx.globalAlpha=1;
+    const top=summitY-60-cam.y, bot=WH-cam.y;
+    const gnd=ctx.createLinearGradient(0,Math.max(0,top),0,H); gnd.addColorStop(0,'#cfd6f2'); gnd.addColorStop(0.5,'#8e8fc0'); gnd.addColorStop(1,'#3a3354');
+    ctx.fillStyle=gnd; ctx.fillRect(0,top,W,bot-top);
+    ctx.fillStyle='#2a2440'; ctx.fillRect(0,top,16,bot-top); ctx.fillRect(W-16,top,16,bot-top);
+    props.forEach(p=>{ const y=p.y-cam.y; if(y<-160||y>H+30) return;
+      if(p.tr){ ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(p.x,y,16,5,0,0,7); ctx.fill(); tree(p.x,y,p.h,'#2c5a44');
+        ctx.fillStyle='rgba(255,255,255,.85)'; for(let k=0;k<3;k++){ const ty=y-p.h*0.12-k*p.h*0.26, w=p.h*(0.34-k*0.07)*0.6;
+          ctx.beginPath(); ctx.moveTo(p.x,ty-p.h*0.30); ctx.lineTo(p.x+w*0.5,ty-p.h*0.12); ctx.lineTo(p.x-w*0.5,ty-p.h*0.12); ctx.closePath(); ctx.fill(); }
+      } else { ctx.fillStyle='#3a3354'; ctx.beginPath(); ctx.arc(p.x,y,p.r,0,7); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(p.x,y-p.r*0.4,p.r*0.6,0,7); ctx.fill(); } });
+    const sy=summitY-cam.y; if(sy<H+40){ ctx.fillStyle='#eef2ff'; rrect(W/2-70,sy-6,140,20,8); ctx.fill();
+      softSun(W/2,sy-26,60,'rgba(255,206,84,.7)'); emoji('🏔️',W/2,sy-30,30);
+      ctx.fillStyle='#ffce54'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('CUME',W/2,sy+8); } },
+};
+
+// --- Phase 7: Vulcão (climb) ---
+const CFG_VOLCANO={ icon:'🌋', WH:2800, summitY:120, every:20, rmin:3.2, rmax:5.2, vig:0.5, loseMsg:'O herói foi atingido pela lava! 🔥',
+  props:(WH)=>{ const p=[]; for(let i=0;i<26;i++) p.push({x:Math.random()<0.5?rand(24,64):rand(W-64,W-24), y:rand(160,WH-120), r:rand(7,15)}); return p; },
+  drawRock:(r)=>{ ctx.shadowColor='#ff7a1a'; ctx.shadowBlur=16; ctx.fillStyle='#3a2018'; ctx.beginPath(); ctx.arc(0,0,r.r,0,7); ctx.fill();
+    ctx.shadowBlur=0; ctx.fillStyle='#ff8c2a'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.2,r.r*0.5,0,7); ctx.fill();
+    ctx.fillStyle='#ffd24a'; ctx.beginPath(); ctx.arc(-r.r*0.2,-r.r*0.2,r.r*0.22,0,7); ctx.fill(); },
+  weather:(cam,t)=>{ for(let i=0;i<24;i++){ const fx=((i*73)%W)+Math.sin(t*0.05+i)*10; const fy=H-((i*41+t*2.2)%H);
+      const a=0.4+0.4*Math.sin(t*0.1+i); ctx.fillStyle='rgba(255,150,40,'+a.toFixed(2)+')'; ctx.beginPath(); ctx.arc(fx,fy,1.6,0,7); ctx.fill(); } },
+  bg:(cam,t,oy,props)=>{ const summitY=120, WH=2800;
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#2a1010'); g.addColorStop(0.5,'#5a1f17'); g.addColorStop(1,'#1a0c0c');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // smoke glow at the top
+    softSun(W/2,40,200,'rgba(255,90,30,.25)');
+    const top=summitY-60-cam.y, bot=WH-cam.y;
+    const gnd=ctx.createLinearGradient(0,Math.max(0,top),0,H); gnd.addColorStop(0,'#3a201a'); gnd.addColorStop(0.5,'#27140f'); gnd.addColorStop(1,'#160a08');
+    ctx.fillStyle=gnd; ctx.fillRect(0,top,W,bot-top);
+    // glowing lava cracks
+    ctx.strokeStyle='rgba(255,110,30,.6)'; ctx.lineWidth=3; ctx.shadowColor='#ff6a1a'; ctx.shadowBlur=10;
+    for(let i=0;i<8;i++){ const yy=top + ((i*260 + (cam.y*0.0))%Math.max(1,bot-top));
+      ctx.beginPath(); ctx.moveTo(W*0.2,yy); ctx.lineTo(W*0.4,yy+30); ctx.lineTo(W*0.6,yy+10); ctx.lineTo(W*0.8,yy+40); ctx.stroke(); }
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#160a08'; ctx.fillRect(0,top,16,bot-top); ctx.fillRect(W-16,top,16,bot-top);
+    props.forEach(p=>{ const y=p.y-cam.y; if(y<-40||y>H+30) return;
+      ctx.fillStyle='#1c0e0a'; ctx.beginPath(); ctx.moveTo(p.x-p.r,y); ctx.lineTo(p.x,y-p.r*2.2); ctx.lineTo(p.x+p.r,y); ctx.closePath(); ctx.fill(); });
+    const sy=summitY-cam.y; if(sy<H+40){ ctx.fillStyle='#3a201a'; rrect(W/2-70,sy-6,140,20,8); ctx.fill();
+      softSun(W/2,sy-26,60,'rgba(255,206,84,.8)'); emoji('🌋',W/2,sy-30,30);
+      ctx.fillStyle='#ffce54'; ctx.font='bold 15px Trebuchet MS'; ctx.textAlign='center'; ctx.fillText('TOPO',W/2,sy+8); } },
+};
+
+// --- Phase 5: Deserto (collect) ---
+const CFG_DESERT={ WW:1500, WH:1200, need:8, itemEmoji:'💧', itemName:'Água', glow:'rgba(120,200,255,.6)',
+  hazEmoji:'🦂', hazN:5, hazSp:1.6, loseMsg:'Um escorpião picou o herói! 🦂', edge:'rgba(120,80,20,.4)',
+  deco:(WW,WH)=>{ const a=[]; for(let i=0;i<14;i++) a.push({x:rand(40,WW-40), y:rand(40,WH-40)}); return a; },
+  drawDeco:(o,x,y)=>{ if(x<-40||x>W+40||y<-60||y>H+30) return;
+    ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(x,y,16,5,0,0,7); ctx.fill();
+    ctx.fillStyle='#3f9b54'; ctx.strokeStyle='#2c6e3b'; ctx.lineWidth=2; ctx.lineJoin='round';
+    rrect(x-7,y-46,14,46,7); ctx.fill(); ctx.stroke();
+    rrect(x-20,y-30,9,7,3); ctx.fill(); ctx.stroke(); rrect(x-20,y-40,8,14,4); ctx.fill(); ctx.stroke();
+    rrect(x+11,y-24,9,7,3); ctx.fill(); ctx.stroke(); rrect(x+12,y-34,8,14,4); ctx.fill(); ctx.stroke(); },
+  bg:(cam,t)=>{ const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#f7dca2'); g.addColorStop(1,'#e0b06a');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H); softSun(W*0.5,70,150,'rgba(255,240,180,.55)');
+    ctx.strokeStyle='rgba(190,150,90,.32)'; ctx.lineWidth=3; const sy=((cam.y%46)+46)%46;
+    for(let y=-sy;y<H;y+=46){ ctx.beginPath(); for(let x=0;x<=W;x+=20){ const yy=y+Math.sin((x+cam.x)*0.02)*5; x===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);} ctx.stroke(); } },
+};
+
+// --- Phase 6: Praia (collect) ---
+const CFG_BEACH={ WW:1500, WH:1200, need:8, itemEmoji:'🐚', itemName:'Conchas', glow:'rgba(255,200,150,.6)',
+  hazEmoji:'🦀', hazN:5, hazSp:1.8, loseMsg:'Um caranguejo beliscou o herói! 🦀', edge:'rgba(40,110,150,.45)',
+  deco:(WW,WH)=>{ const a=[]; for(let i=0;i<10;i++) a.push({x:rand(40,WW-40), y:rand(40,WH-40), st:Math.random()<0.5}); return a; },
+  drawDeco:(o,x,y)=>{ if(x<-40||x>W+40||y<-70||y>H+30) return;
+    if(o.st){ ctx.fillStyle='#ff8a5b'; for(let k=0;k<5;k++){ const a=k/5*Math.PI*2; ctx.beginPath();
+        ctx.ellipse(x+Math.cos(a)*8,y+Math.sin(a)*8,4,8,a+Math.PI/2,0,7); ctx.fill(); } ctx.fillStyle='#ffb38a'; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
+    } else { ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(x,y,16,5,0,0,7); ctx.fill();
+      ctx.fillStyle='#7a4a22'; ctx.fillRect(x-3,y-40,6,40);
+      ctx.fillStyle='#3f9b54'; for(let k=0;k<5;k++){ const a=-Math.PI/2 + (k-2)*0.5; ctx.save(); ctx.translate(x,y-40); ctx.rotate(a);
+        ctx.beginPath(); ctx.ellipse(22,0,22,7,0,0,7); ctx.fill(); ctx.restore(); } } },
+  bg:(cam,t)=>{ const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#ffe9b0'); g.addColorStop(1,'#f3d089');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // water band along the top of the world
+    const wy=160-cam.y; if(wy>-50){ const wg=ctx.createLinearGradient(0,0,0,Math.max(2,wy)); wg.addColorStop(0,'#3fb4d6'); wg.addColorStop(1,'#86d6e8');
+      ctx.fillStyle='#5cc0db'; ctx.fillRect(0,0,W,wy);
+      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2;
+      for(let yy=20;yy<wy;yy+=22){ ctx.beginPath(); for(let x=0;x<=W;x+=18){ ctx.lineTo(x,yy+Math.sin((x+t*2)*0.04)*4); } ctx.stroke(); }
+      // foam line
+      ctx.fillStyle='rgba(255,255,255,.7)'; ctx.fillRect(0,wy-4,W,5); }
+    softSun(W*0.8,60,130,'rgba(255,245,200,.6)');
+    groundTufts(cam,'rgba(220,180,110,.5)'); },
+};
+
+// --- Phase 8: Geleira (collect, slippery) ---
+const CFG_ICE={ WW:1500, WH:1200, need:8, itemEmoji:'💎', itemName:'Cristais', glow:'rgba(150,230,255,.7)',
+  hazEmoji:'⛄', hazN:5, hazSp:1.5, slippery:true, vig:0.4, loseMsg:'O herói trombou num boneco de neve! ⛄', edge:'rgba(120,170,200,.4)',
+  deco:(WW,WH)=>{ const a=[]; for(let i=0;i<12;i++) a.push({x:rand(40,WW-40), y:rand(40,WH-40), h:rand(26,52)}); return a; },
+  drawDeco:(o,x,y)=>{ if(x<-40||x>W+40||y<-70||y>H+30) return;
+    ctx.fillStyle='rgba(0,0,0,.10)'; ctx.beginPath(); ctx.ellipse(x,y,12,4,0,0,7); ctx.fill();
+    const ig=ctx.createLinearGradient(x,y-o.h,x,y); ig.addColorStop(0,'#dff6ff'); ig.addColorStop(1,'#9ed3ea');
+    ctx.fillStyle=ig; ctx.strokeStyle='#bfe6f5'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x,y-o.h); ctx.lineTo(x+8,y); ctx.lineTo(x-8,y); ctx.closePath(); ctx.fill(); ctx.stroke(); },
+  bg:(cam,t)=>{ const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#dff1fb'); g.addColorStop(1,'#a9d5ea');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // ice cracks
+    ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=2;
+    const sx=((cam.x%120)+120)%120, sy=((cam.y%120)+120)%120;
+    for(let x=-sx;x<W;x+=120) for(let y=-sy;y<H;y+=120){ ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+30,y+18); ctx.lineTo(x+10,y+40); ctx.stroke(); }
+    // sparkles
+    ctx.fillStyle='rgba(255,255,255,.8)'; for(let i=0;i<20;i++){ const a=0.4+0.5*Math.sin(t*0.08+i);
+      ctx.globalAlpha=a; ctx.fillRect((i*89+ (t*0.3))%W, (i*57)%H, 2,2);} ctx.globalAlpha=1; },
+};
+
+// --- Phase 9: Castelo nas Nuvens (collect) ---
+const CFG_SKY={ WW:1500, WH:1200, need:8, itemEmoji:'⭐', itemName:'Estrelas', glow:'rgba(255,235,140,.7)',
+  hazEmoji:'🌩️', hazN:4, hazSp:1.7, vig:0.3, loseMsg:'Uma nuvem-relâmpago atingiu o herói! 🌩️', edge:'rgba(120,140,200,.35)',
+  deco:(WW,WH)=>{ const a=[]; for(let i=0;i<14;i++) a.push({x:rand(20,WW-20), y:rand(20,WH-20), s:rand(0.8,1.6)}); return a; },
+  drawDeco:(o,x,y)=>{ if(x<-80||x>W+80||y<-40||y>H+30) return; cloud(x,y,o.s,0.9);
+    ctx.fillStyle='rgba(190,210,255,.5)'; ctx.beginPath(); ctx.ellipse(x,y+10*o.s,40*o.s,8*o.s,0,0,7); ctx.fill(); },
+  bg:(cam,t)=>{ const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#aee0ff'); g.addColorStop(0.5,'#cdb8ff'); g.addColorStop(1,'#ffc8e6');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H); softSun(W*0.5,90,180,'rgba(255,250,220,.5)');
+    ctx.fillStyle='rgba(255,255,255,.8)'; for(let i=0;i<26;i++){ const a=0.3+0.6*Math.sin(t*0.05+i); ctx.globalAlpha=a;
+      ctx.fillRect(((i*97 - cam.x*0.3)%W+W)%W, ((i*61 - cam.y*0.3)%H+H)%H, 2,2);} ctx.globalAlpha=1; },
+};
 
 // ======================================================
 //  INTRO CUTSCENE — how the amulet was shattered (~60s)
@@ -972,8 +1145,8 @@ function makeCutscene(onDone){
     {dur:720, text:'Há muito tempo, na Floresta Dourada, vivia Bartolomeu — o urso guardião do Amuleto Dourado.'},
     {dur:720, text:'O amuleto sagrado mantinha o equilíbrio e a paz de toda a floresta.'},
     {dur:780, text:'Mas numa noite de tempestade, uma sombra invejosa despertou nas profundezas...'},
-    {dur:720, text:'Um raio guiado pela sombra atingiu o amuleto — e ele se partiu em QUATRO pedaços!'},
-    {dur:660, text:'Os pedaços voaram para os quatro cantos da floresta. Bartolomeu parte para recuperá-los e refazer o amuleto.'},
+    {dur:720, text:'Um raio guiado pela sombra atingiu o amuleto — e ele se partiu em vários pedaços!'},
+    {dur:660, text:'Os pedaços voaram para terras distantes. Nosso herói parte para recuperá-los todos e refazer o amuleto.'},
   ];
   const total=scenes.reduce((a,s)=>a+s.dur,0);
   function at(t){ let acc=0; for(let i=0;i<scenes.length;i++){ if(t<acc+scenes[i].dur) return {i,local:t-acc,dur:scenes[i].dur}; acc+=scenes[i].dur; } return {i:4,local:scenes[4].dur,dur:scenes[4].dur}; }
