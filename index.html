@@ -144,7 +144,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 // ---------- game state ----------
 const PHASES = [
   { tag:'Fase 1 · A Floresta', icon:'🌲', title:'Mel da Floresta',
-    text:'Colete 8 potes de mel 🍯 movendo o urso, mas fuja das abelhas 🐝. Encoste numa abelha e perde o pedaço!' },
+    text:'O urso corre pela floresta! Toque (ou Espaço) para PULAR: pegue 8 potes de mel 🍯, salte sobre as rochas 🪨 e desvie das abelhas 🐝. Segure → para correr mais rápido.' },
   { tag:'Fase 2 · O Rio', icon:'🌊', title:'A Travessia',
     text:'Pule de pedra em pedra para atravessar o rio. Toque/seta para pular no tempo certo. Caia na água e acabou!' },
   { tag:'Fase 3 · A Caverna', icon:'🕳️', title:'Cristais da Memória',
@@ -237,23 +237,32 @@ function makePhase(i){
 }
 
 // shared bear drawer — full-bodied bear -----------------
-function drawBear(x,y,s=1,face=1,bob=0){
+// run: number => running cycle phase (legs/arms swing); 'jump' => airborne pose; null/undefined => idle
+function drawBear(x,y,s=1,face=1,bob=0,run=null){
   ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
   const FUR='#8a5a32', FUR_D='#6a4322', FUR_L='#a87a4a', SNOUT='#e3c39a', PAD='#5a3a20';
-  // ground shadow
+  const running = typeof run==='number';
+  const jumping = run==='jump';
+  const sw = running ? Math.sin(run)*7 : 0;     // leg/arm swing amount
+  // ground shadow (smaller while airborne)
   ctx.fillStyle='rgba(0,0,0,.22)';
-  ctx.beginPath(); ctx.ellipse(0,40,23,6,0,0,7); ctx.fill();
-  // back legs / feet
+  ctx.beginPath(); ctx.ellipse(0,40, jumping?14:23, 6,0,0,7); ctx.fill();
+  // legs / feet
   ctx.fillStyle=FUR_D;
-  ctx.beginPath(); ctx.ellipse(-11,31,8.5,11,0,0,7); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(11,31,8.5,11,0,0,7); ctx.fill();
+  let lx=-11, rx=11, ly=31, ry=31;
+  if(running){ lx=-11+sw; rx=11-sw; ly=31-Math.abs(sw)*0.4; ry=31-Math.abs(sw)*0.4; }
+  else if(jumping){ lx=-9; rx=9; ly=26; ry=26; }       // tucked up
+  ctx.beginPath(); ctx.ellipse(lx,ly,8.5,11,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(rx,ry,8.5,11,0,0,7); ctx.fill();
   ctx.fillStyle=PAD;   // paw pads
-  ctx.beginPath(); ctx.ellipse(-11,35,4.2,5,0,0,7); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(11,35,4.2,5,0,0,7); ctx.fill();
-  // arms (slight swing with bob)
+  ctx.beginPath(); ctx.ellipse(lx,ly+4,4.2,5,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(rx,ry+4,4.2,5,0,0,7); ctx.fill();
+  // arms (swing opposite to legs while running; raised while jumping)
   ctx.fillStyle=FUR;
-  ctx.beginPath(); ctx.ellipse(-16,9+bob*0.6,6.5,12,0.35,0,7); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(16,9-bob*0.6,6.5,12,-0.35,0,7); ctx.fill();
+  const aly = jumping? -2 : 9 - sw*0.6 + bob*0.6;
+  const ary = jumping? -2 : 9 + sw*0.6 - bob*0.6;
+  ctx.beginPath(); ctx.ellipse(-16,aly,6.5,12,0.35,0,7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(16,ary,6.5,12,-0.35,0,7); ctx.fill();
   // body
   ctx.fillStyle=FUR;
   ctx.beginPath(); ctx.ellipse(0,11,16,19,0,0,7); ctx.fill();
@@ -284,65 +293,92 @@ function drawBear(x,y,s=1,face=1,bob=0){
   ctx.restore();
 }
 
-// ---------- PHASE 1: FOREST (collect honey, avoid bees) ----------
+// ---------- PHASE 1: FOREST (side-scrolling runner) ----------
 function phaseForest(){
-  const bear={x:W/2,y:H-120,r:22,sp:5};
-  let honey=[], bees=[], collected=0, need=8, t=0;
-  for(let k=0;k<need+2;k++) honey.push(spawnHoney());
-  for(let k=0;k<3;k++) bees.push(spawnBee());
-  function spawnHoney(){ return {x:rand(40,W-40), y:rand(120,H-160), got:false}; }
-  function spawnBee(){ const e=Math.random()<.5; return {
-    x: e?-20:W+20, y:rand(120,H-200),
-    vx:(e?1:-1)*rand(2,3.4), vy:rand(-1,1), };
+  const groundY = H-120;                       // y where the bear's feet rest
+  const bear = { x:130, y:groundY, vy:0, onGround:true, runT:0 };
+  const GRAV=0.8, JUMP=-15.5;
+  let worldX=0, baseSpeed=4.2, collected=0, need=8, t=0, lost=false;
+  // build the track: honey (low or high), rocks (jump over), bees (flying)
+  const items=[];
+  let wx=460;
+  for(let i=0;i<60;i++){
+    const roll=Math.random();
+    if(roll<0.55){ items.push({wx, y:groundY-30-(Math.random()<.45?95:0), type:'honey', got:false}); }
+    else if(roll<0.80){ items.push({wx, y:groundY, type:'rock', got:false}); }
+    else { items.push({wx, y:groundY-130, type:'bee', ph:Math.random()*6, got:false}); }
+    wx += 150 + Math.random()*130;
+  }
+  function jump(){ if(bear.onGround && !lost){ bear.vy=JUMP; bear.onGround=false; } }
+  function row(speed, spacing, size, col, baseY){
+    const off=(worldX*speed)%spacing;
+    for(let x=-spacing; x<W+spacing*2; x+=spacing){ tree(x-off, baseY, size, col); }
   }
   return {
+    key(k){ if(k===' '||k==='ArrowUp') jump(); },
+    tap(){ jump(); },
     update(){
       t++;
-      // bear move (keys)
-      if(keys.ArrowLeft) bear.x-=bear.sp;
-      if(keys.ArrowRight) bear.x+=bear.sp;
-      if(keys.ArrowUp) bear.y-=bear.sp;
-      if(keys.ArrowDown) bear.y+=bear.sp;
-      // pointer follow
-      if(pointer.down){ bear.x += clamp(pointer.x-bear.x,-bear.sp,bear.sp);
-                        bear.y += clamp(pointer.y-bear.y,-bear.sp,bear.sp); }
-      bear.x=clamp(bear.x,bear.r,W-bear.r); bear.y=clamp(bear.y,110+bear.r,H-bear.r);
-      // honey
-      honey.forEach(h=>{ if(!h.got && Math.hypot(h.x-bear.x,h.y-bear.y)<bear.r+10){
-        h.got=true; collected++; toast('Mel! '+collected+'/'+need);
-        if(collected>=need){ winPhase(); }
-      }});
-      // bees
-      if(t%160===0 && bees.length<6) bees.push(spawnBee());
-      bees.forEach(b=>{ b.x+=b.vx; b.y+=b.vy;
-        if(b.y<110||b.y>H-30) b.vy*=-1;
-        if(Math.hypot(b.x-bear.x,b.y-bear.y)<bear.r+9){ losePhase('Uma abelha picou o urso! 🐝'); }
-      });
-      bees = bees.filter(b=> b.x>-40 && b.x<W+40);
+      if(lost) return;
+      let sp=baseSpeed;
+      if(keys.ArrowRight) sp=baseSpeed*1.7;
+      if(keys.ArrowLeft)  sp=baseSpeed*0.55;
+      worldX += sp;
+      if(bear.onGround) bear.runT += sp*0.07;       // animate legs only while running
+      // physics
+      bear.vy += GRAV; bear.y += bear.vy;
+      if(bear.y>=groundY){ bear.y=groundY; bear.vy=0; bear.onGround=true; }
+      // interactions
+      for(const it of items){
+        if(it.got) continue;
+        const sx = bear.x + (it.wx - worldX);
+        if(sx < -60) { it.got=true; continue; }      // scrolled past, retire it
+        it.sx = sx;
+        const iy = it.type==='bee' ? it.y + Math.sin(t*0.05+it.ph)*22 : it.y;
+        it.iy = iy;
+        if(sx > bear.x-30 && sx < bear.x+28){
+          const dist = Math.hypot(sx-bear.x, iy-bear.y-(-6));
+          if(it.type==='honey' && dist<34){ it.got=true; collected++; toast('Mel! '+collected+'/'+need);
+            if(collected>=need){ winPhase(); return; } }
+          else if(it.type==='rock' && bear.y>groundY-30){ lost=true; losePhase('O urso tropeçou na rocha! 🪨 Pule sobre ela.'); return; }
+          else if(it.type==='bee' && dist<30){ lost=true; losePhase('Uma abelha picou o urso! 🐝'); return; }
+        }
+      }
     },
     draw(){
       // sky
       const sky=ctx.createLinearGradient(0,0,0,H);
-      sky.addColorStop(0,'#bfe3a0'); sky.addColorStop(0.45,'#7fbf6a'); sky.addColorStop(1,'#2f6b3a');
+      sky.addColorStop(0,'#cde7ad'); sky.addColorStop(0.5,'#86c46e'); sky.addColorStop(1,'#3f7d44');
       ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
-      // sun glow
-      ctx.fillStyle='rgba(255,250,210,.5)';
-      ctx.beginPath(); ctx.arc(W*0.8,90,70,0,7); ctx.fill();
-      // distant tree line
-      ctx.fillStyle='#3c7a47';
-      for(let i=0;i<9;i++){ const x=i*64-10; tree(x,H*0.42,46,'#2e6238'); }
-      // nearer, darker trees
-      ctx.fillStyle='#1f4a2b';
-      for(let i=0;i<6;i++){ const x=i*100+10; tree(x,H+30,150,'#1c4226'); }
-      // grassy ground
-      ctx.fillStyle='#3e7d3f'; ctx.fillRect(0,H-70,W,70);
+      // sun
+      ctx.fillStyle='rgba(255,250,210,.55)';
+      ctx.beginPath(); ctx.arc(W*0.78,86,66,0,7); ctx.fill();
+      // parallax tree layers (far = slow, near = fast)
+      row(0.15, 90,  44, '#3f8350', H*0.50);
+      row(0.35, 140, 78, '#2f6b3e', H*0.62);
+      row(0.65, 210, 130,'#234f2d', H*0.80);
+      // ground
+      ctx.fillStyle='#3e7d3f'; ctx.fillRect(0,groundY+24,W,H-groundY-24);
+      ctx.fillStyle='#2f6630'; ctx.fillRect(0,groundY+24,W,5);
+      // moving grass tufts
       ctx.fillStyle='#357036';
-      for(let i=0;i<W;i+=14){ ctx.fillRect(i,H-72,3,8); }
-      // progress
+      const goff=(worldX)%26;
+      for(let x=-goff; x<W; x+=26){ ctx.fillRect(x,groundY+18,3,8); }
+      // items
+      for(const it of items){ if(it.got || it.sx===undefined) continue;
+        if(it.sx<-40||it.sx>W+40) continue;
+        if(it.type==='honey') emoji('🍯', it.sx, it.iy, 30);
+        else if(it.type==='bee') emoji('🐝', it.sx, it.iy, 26);
+        else { // rock
+          ctx.fillStyle='#8a795e'; ctx.beginPath(); ctx.arc(it.sx,groundY+14,18,0,7); ctx.fill();
+          ctx.fillStyle='#6b5c45'; ctx.beginPath(); ctx.arc(it.sx+5,groundY+18,11,0,7); ctx.fill();
+        }
+      }
+      // bear (running pose on ground, jump pose airborne)
+      const pose = bear.onGround ? bear.runT : 'jump';
+      drawBear(bear.x, bear.y-24, 1, 1, 0, pose);
       banner('Mel: '+collected+'/'+need);
-      honey.forEach(h=>{ if(h.got)return; emoji('🍯',h.x,h.y,28); });
-      bees.forEach(b=> emoji('🐝',b.x,b.y,24));
-      drawBear(bear.x,bear.y,1, pointer.x<bear.x?-1:1, Math.sin(t*0.25)*2);
+      hint('Toque/Espaço = PULAR  ·  → corre mais rápido');
     }
   };
 }
