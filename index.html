@@ -158,6 +158,9 @@ let phase = 0;       // current phase index
 let game = null;     // active phase object {update, draw, input}
 let keys = {};
 let pointer = {down:false, x:0, y:0};
+let mouse = {x:W/2, y:H/2};   // last hover position (for scenery parallax)
+// scenery offset from mouse: depth ~ how far that layer reacts (px per half-screen)
+function par(depth){ return { x:(mouse.x-W/2)/(W/2)*depth, y:(mouse.y-H/2)/(H/2)*depth }; }
 
 // ---------- input ----------
 addEventListener('keydown', e=>{ keys[e.key]=true;
@@ -170,11 +173,11 @@ function canvasPos(e){
   const p = e.touches? e.touches[0]: e;
   return { x:(p.clientX-r.left)/r.width*W, y:(p.clientY-r.top)/r.height*H };
 }
-cv.addEventListener('mousedown', e=>{ const p=canvasPos(e); pointer.down=true; pointer.x=p.x; pointer.y=p.y; if(game&&game.tap)game.tap(p.x,p.y); });
-cv.addEventListener('mousemove', e=>{ if(!pointer.down)return; const p=canvasPos(e); pointer.x=p.x; pointer.y=p.y; });
+cv.addEventListener('mousedown', e=>{ const p=canvasPos(e); pointer.down=true; pointer.x=p.x; pointer.y=p.y; mouse.x=p.x; mouse.y=p.y; if(game&&game.tap)game.tap(p.x,p.y); });
+cv.addEventListener('mousemove', e=>{ const p=canvasPos(e); mouse.x=p.x; mouse.y=p.y; if(pointer.down){ pointer.x=p.x; pointer.y=p.y; } });
 addEventListener('mouseup', ()=> pointer.down=false);
-cv.addEventListener('touchstart', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.down=true; pointer.x=p.x; pointer.y=p.y; if(game&&game.tap)game.tap(p.x,p.y); }, {passive:false});
-cv.addEventListener('touchmove', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.x=p.x; pointer.y=p.y; }, {passive:false});
+cv.addEventListener('touchstart', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.down=true; pointer.x=p.x; pointer.y=p.y; mouse.x=p.x; mouse.y=p.y; if(game&&game.tap)game.tap(p.x,p.y); }, {passive:false});
+cv.addEventListener('touchmove', e=>{ e.preventDefault(); const p=canvasPos(e); pointer.x=p.x; pointer.y=p.y; mouse.x=p.x; mouse.y=p.y; }, {passive:false});
 cv.addEventListener('touchend', e=>{ e.preventDefault(); pointer.down=false; }, {passive:false});
 
 // ---------- screen flow ----------
@@ -392,6 +395,7 @@ function phaseRiver(){
   const bear={ x:W/2, y:baseY, jumping:false, jt:0, fromX:W/2, landX:W/2, hit:false };
   const target={ x:70, y:stoneY, r:48, vx:3 };
   let result=null;         // 'fall' when the bear missed
+  let t=0;                 // time for water animation
   function newTarget(){
     const fromLeft = Math.random()<.5;
     target.x = fromLeft? target.r+10 : W-target.r-10;
@@ -406,16 +410,44 @@ function phaseRiver(){
   }
   function drawStone(x,y,r,glow){
     ctx.save();
-    if(glow){ ctx.shadowColor='#ffce54'; ctx.shadowBlur=18; }
-    ctx.fillStyle='#76838c'; ctx.beginPath(); ctx.ellipse(x,y+9,r,r*0.5,0,0,7); ctx.fill();
-    ctx.fillStyle=glow?'#dde6ec':'#c2ccd2'; ctx.beginPath(); ctx.ellipse(x,y,r,r*0.45,0,0,7); ctx.fill();
-    if(glow){ ctx.strokeStyle='#ffce54'; ctx.lineWidth=3; ctx.stroke(); }
+    // ripple rings where the rock meets the water
+    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=2;
+    for(let k=0;k<2;k++){
+      const rp=((t*0.6 + k*30)%60)/60;        // 0..1 expanding
+      ctx.globalAlpha=(1-rp)*0.5;
+      ctx.beginPath(); ctx.ellipse(x,y+r*0.42, r*(0.7+rp*0.8), r*(0.30+rp*0.34),0,0,7); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    // submerged base (darker, slightly bluish)
+    ctx.fillStyle='rgba(20,40,55,.55)';
+    ctx.beginPath(); ctx.ellipse(x,y+r*0.5, r*0.92, r*0.40,0,0,7); ctx.fill();
+    if(glow){ ctx.shadowColor='#ffce54'; ctx.shadowBlur=22; }
+    // rock body with volume (radial gradient: lit top-left -> shaded bottom-right)
+    const rg=ctx.createRadialGradient(x-r*0.35,y-r*0.35,r*0.2, x,y,r*1.1);
+    rg.addColorStop(0,'#cdd6dc'); rg.addColorStop(0.55,'#9aa6ad'); rg.addColorStop(1,'#5f6a72');
+    ctx.fillStyle=rg;
+    ctx.beginPath(); ctx.ellipse(x,y, r, r*0.62,0,0,7); ctx.fill();
+    ctx.shadowBlur=0;
+    // top sunlit highlight
+    ctx.fillStyle='rgba(255,255,255,.30)';
+    ctx.beginPath(); ctx.ellipse(x-r*0.2,y-r*0.22, r*0.5, r*0.20,-0.2,0,7); ctx.fill();
+    // cracks / texture
+    ctx.strokeStyle='rgba(60,70,78,.55)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x-r*0.4,y-r*0.05); ctx.lineTo(x-r*0.05,y+r*0.12); ctx.lineTo(x+r*0.3,y-r*0.02); ctx.stroke();
+    // moss patches on top
+    ctx.fillStyle='rgba(94,140,70,.85)';
+    ctx.beginPath(); ctx.ellipse(x+r*0.25,y-r*0.28, r*0.26, r*0.12,0.2,0,7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x-r*0.45,y-r*0.16, r*0.16, r*0.08,-0.1,0,7); ctx.fill();
+    // golden rim for the active target
+    if(glow){ ctx.strokeStyle='#ffce54'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(x,y, r, r*0.62,0,0,7); ctx.stroke(); }
     ctx.restore();
   }
   return {
     key(k){ if(k===' '||k==='ArrowUp') jump(); },
     tap(){ jump(); },
     update(){
+      t++;
       if(!bear.jumping && !result){
         target.x += target.vx;
         if(target.x < target.r){ target.x=target.r; target.vx*=-1; }
@@ -443,12 +475,38 @@ function phaseRiver(){
       }
     },
     draw(){
-      const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#2a82b8'); g.addColorStop(1,'#0e3a59');
+      const mp=par(16);                          // background reacts to the mouse
+      // deep water gradient
+      const g=ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0,'#7ec8e8'); g.addColorStop(0.28,'#3a9bcb');
+      g.addColorStop(0.7,'#1c6da0'); g.addColorStop(1,'#0a3357');
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=3;
-      for(let y=130; y<H; y+=44){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      // sky reflection band near the top, drifting with the mouse
+      ctx.fillStyle='rgba(220,245,255,.18)';
+      ctx.fillRect(0,0,W,110+mp.y);
+      // animated wave bands (sine), parallax-shifted; far waves fainter
+      function wave(yBase, amp, len, spd, alpha, lw){
+        ctx.strokeStyle='rgba(255,255,255,'+alpha+')'; ctx.lineWidth=lw;
+        ctx.beginPath();
+        for(let x=-10; x<=W+10; x+=10){
+          const y=yBase + mp.y*0.4 + Math.sin((x*len)+(t*spd))*amp;
+          x===-10? ctx.moveTo(x,y): ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+      }
+      for(let i=0;i<9;i++){
+        const yy=150+i*70;
+        wave(yy, 3+i*0.4, 0.018, 0.05+i*0.004, 0.10+ (i%2)*0.05, 2.5);
+      }
+      // sparkly highlights drifting on the surface
+      ctx.fillStyle='rgba(255,255,255,.5)';
+      for(let i=0;i<16;i++){
+        const sx=((i*89 + t*1.2)%W);
+        const sy=140 + ((i*53)%(H-200)) + Math.sin(t*0.06+i)*4;
+        ctx.fillRect(sx + mp.x*0.5, sy, 3, 2);
+      }
       // alignment guide
-      ctx.strokeStyle='rgba(255,206,84,.30)'; ctx.setLineDash([7,9]); ctx.lineWidth=2;
+      ctx.strokeStyle='rgba(255,206,84,.32)'; ctx.setLineDash([7,9]); ctx.lineWidth=2;
       ctx.beginPath(); ctx.moveTo(W/2,stoneY); ctx.lineTo(W/2,baseY+30); ctx.stroke(); ctx.setLineDash([]);
       // base stone the bear launches from
       drawStone(W/2, baseY+18, 52, false);
@@ -470,12 +528,16 @@ function phaseCave(){
   const cx=[W*0.32,W*0.68,W*0.32,W*0.68];
   const cyA=[H*0.40,H*0.40,H*0.66,H*0.66];
   for(let i=0;i<4;i++) cells.push({x:cx[i],y:cyA[i],r:62,flash:0});
-  let seq=[], step=0, round=0, need=4;
+  let seq=[], step=0, round=0, need=4, tt=0;
   let state='show'; // show | input | wait
   let showIdx=0, showT=0, inputIdx=0;
   function nextRound(){ round++; seq.push(Math.floor(rand(0,4))); state='show'; showIdx=0; showT=0; inputIdx=0; }
   nextRound();
   function flash(i){ cells[i].flash=1; }
+  // pre-placed background cave rock formations (deterministic)
+  const stalac=[]; for(let i=0;i<7;i++) stalac.push({x:rand(20,W-20), w:rand(26,52), h:rand(60,150)});
+  const stalag=[]; for(let i=0;i<6;i++) stalag.push({x:rand(20,W-20), w:rand(30,60), h:rand(50,120)});
+  const dust=[];  for(let i=0;i<24;i++) dust.push({x:rand(0,W), y:rand(80,H-60), r:rand(1,2.4), ph:rand(0,6)});
   return {
     tap(x,y){
       if(state!=='input') return;
@@ -492,6 +554,7 @@ function phaseCave(){
       }}
     },
     update(){
+      tt++;
       cells.forEach(c=> c.flash=Math.max(0,c.flash-0.05));
       if(state==='show'){
         showT++;
@@ -501,17 +564,41 @@ function phaseCave(){
       }
     },
     draw(){
-      const g=ctx.createRadialGradient(W/2,H/2,40,W/2,H/2,W*0.8);
-      g.addColorStop(0,'#2a2140'); g.addColorStop(1,'#0c0a16');
+      const mp=par(20);                          // scenery follows the mouse
+      // glow centred slightly toward the mouse
+      const g=ctx.createRadialGradient(W/2+mp.x,H/2+mp.y,40, W/2,H/2,W*0.85);
+      g.addColorStop(0,'#2f2548'); g.addColorStop(1,'#0a0813');
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      // far rock layer (moves a little with the mouse)
+      const f1=par(8);
+      ctx.fillStyle='#181225';
+      stalac.forEach(s=>{ const x=s.x+f1.x; ctx.beginPath();
+        ctx.moveTo(x-s.w/2,0); ctx.lineTo(x+s.w/2,0); ctx.lineTo(x,s.h*0.8); ctx.closePath(); ctx.fill(); });
+      stalag.forEach(s=>{ const x=s.x+f1.x; ctx.beginPath();
+        ctx.moveTo(x-s.w/2,H); ctx.lineTo(x+s.w/2,H); ctx.lineTo(x,H-s.h*0.8); ctx.closePath(); ctx.fill(); });
+      // near rock layer (moves more — stronger parallax)
+      const f2=par(24);
+      ctx.fillStyle='#241a36';
+      stalac.forEach((s,i)=>{ if(i%2)return; const x=s.x+f2.x; ctx.beginPath();
+        ctx.moveTo(x-s.w*0.7,0); ctx.lineTo(x+s.w*0.7,0); ctx.lineTo(x,s.h*1.15); ctx.closePath(); ctx.fill(); });
+      stalag.forEach((s,i)=>{ if(i%2)return; const x=s.x+f2.x; ctx.beginPath();
+        ctx.moveTo(x-s.w*0.7,H); ctx.lineTo(x+s.w*0.7,H); ctx.lineTo(x,H-s.h*1.15); ctx.closePath(); ctx.fill(); });
+      // floating dust motes drifting + parallax
+      ctx.fillStyle='rgba(200,190,230,.5)';
+      dust.forEach(d=>{ const x=(d.x+tt*0.2+mp.x*1.5)%W, y=d.y+Math.sin(tt*0.02+d.ph)*6+mp.y*0.6;
+        ctx.beginPath(); ctx.arc(x,y,d.r,0,7); ctx.fill(); });
+      // crystals (foreground — counter-shift slightly so they feel closest)
       cells.forEach((c,i)=>{
-        ctx.save(); ctx.translate(c.x,c.y);
+        ctx.save(); ctx.translate(c.x-mp.x*0.5,c.y-mp.y*0.5);
         const f=c.flash;
         ctx.shadowColor=cols[i]; ctx.shadowBlur=20+40*f;
+        // crystal body
         ctx.fillStyle = f>0.05? lit[i]: cols[i];
-        // crystal diamond
         ctx.beginPath(); ctx.moveTo(0,-c.r); ctx.lineTo(c.r*0.7,0);
         ctx.lineTo(0,c.r); ctx.lineTo(-c.r*0.7,0); ctx.closePath(); ctx.fill();
+        // facet highlight
+        ctx.shadowBlur=0; ctx.fillStyle='rgba(255,255,255,'+(0.18+f*0.4)+')';
+        ctx.beginPath(); ctx.moveTo(0,-c.r); ctx.lineTo(c.r*0.7,0); ctx.lineTo(0,0); ctx.closePath(); ctx.fill();
         ctx.restore();
       });
       banner('Rodada '+round+'/'+need);
