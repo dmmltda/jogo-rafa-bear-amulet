@@ -77,6 +77,9 @@
   #menuBtn{ left:12px; top:88px; }
   #wardrobeBtn{ right:12px; }
   #familyBtn{ right:12px; top:88px; }
+  #bagBtn{ right:12px; top:134px; position:relative; }
+  #bagDot{ position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; border-radius:9px;
+    background:#ff5b5b; color:#fff; font-size:10px; font-weight:bold; line-height:16px; padding:0 3px; display:none; }
   #coinChip{ position:absolute; top:46px; left:50%; transform:translateX(-50%); z-index:7;
     background:rgba(0,0,0,.5); border:1px solid #ffce5466; color:#ffce54; font-weight:bold;
     font-size:15px; padding:5px 14px; border-radius:16px; pointer-events:none; }
@@ -184,6 +187,14 @@
   .epCard .ee{ font-size:30px; } .epCard .ei{ flex:1; }
   .epCard .et{ font-size:12px; font-weight:bold; line-height:1.1; }
   .epCard .en{ font-size:10px; color:#ffce54; }
+  /* backpack grid */
+  #bagScreen{ justify-content:flex-start; overflow-y:auto; gap:12px; padding-top:22px; }
+  #bagGrid{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; width:100%; max-width:360px; }
+  .bagCard{ background:rgba(255,255,255,.1); border:2px solid rgba(255,255,255,.2); border-radius:12px;
+    padding:8px 2px; display:flex; flex-direction:column; align-items:center; gap:1px; position:relative; }
+  .bagCard .be{ font-size:28px; }
+  .bagCard .bn{ font-size:11px; color:#ffce54; font-weight:bold; }
+  #bagEmpty{ color:#cdd6e6; font-size:15px; }
 </style>
 </head>
 <body>
@@ -201,6 +212,7 @@
   <button id="menuBtn" class="hidden iconBtn">🏠</button>
   <button id="wardrobeBtn" class="hidden iconBtn">👕</button>
   <button id="familyBtn" class="hidden iconBtn">👨‍👩‍👧</button>
+  <button id="bagBtn" class="hidden iconBtn">🎒<span id="bagDot"></span></button>
   <div id="coinChip" class="hidden">🪙 <span class="coinVal">0</span></div>
 
   <!-- Roblox-style touch controls (free-roam phases) -->
@@ -231,6 +243,14 @@
     <h2>🏆 Troféus <span id="achCount">0/18</span></h2>
     <div id="achGrid"></div>
     <button class="btn" id="achBack">Voltar</button>
+  </div>
+
+  <!-- MOCHILA / BACKPACK -->
+  <div class="screen hidden" id="bagScreen">
+    <h2>🎒 Mochila <span id="bagCount">0</span></h2>
+    <p class="small">Tudo que você toca e compra fica guardado aqui! 🧸</p>
+    <div id="bagGrid"></div>
+    <button class="btn" id="bagBack">Voltar</button>
   </div>
 
   <!-- DESENHOS / SÉRIE ANIMADA -->
@@ -365,13 +385,16 @@ const Sound = (()=>{
     else if(name==='lose'){ tone(380,0.22,'sawtooth',0.16,n); tone(200,0.32,'sawtooth',0.16,n+0.14); }
     else if(name==='blip'){ tone(720,0.07,'triangle',0.16,n); }
     else if(name==='click'){ tone(820,0.05,'square',0.1,n); } }
+  // cartoon "voice": loud little blips, pitched per character, so they seem to talk
+  function voice(seed){ ensure(); if(!ac||muted) return; const n=ac.currentTime; const base=320+((seed%6)*60);
+    for(let i=0;i<3;i++){ tone(base*(1+i*0.16),0.11,'square',0.3,n+i*0.085); } }
   const MEL=[523,0,659,784,0,659,523,0, 587,0,698,880,0,698,587,0,
              523,0,659,784,880,784,659,587, 523,0,392,0,523,0,0,0];
   function tick(){ if(!ac||muted) return; const f=MEL[step++%MEL.length]; if(f) tone(f/2,0.30,'sine',0.05); }
   function start(){ ensure(); if(!timer && !muted) timer=setInterval(tick,300); }
   function stop(){ if(timer){ clearInterval(timer); timer=null; } }
   function toggle(){ muted=!muted; if(muted) stop(); else start(); return !muted; }
-  return { ensure, sfx, start, stop, toggle, get on(){ return !muted; } };
+  return { ensure, sfx, voice, start, stop, toggle, get on(){ return !muted; } };
 })();
 
 // ---------- game state ----------
@@ -521,6 +544,11 @@ const DEFAULT_STATS = { coinsEarned:0, level:1, places:[], goals:0, naveWins:0, 
 let stats = Object.assign({}, DEFAULT_STATS);
 try{ const s=JSON.parse(localStorage.getItem('amuletoStats')||'null'); if(s) stats=Object.assign({}, DEFAULT_STATS, s); }catch(e){}
 function saveStats(){ try{ localStorage.setItem('amuletoStats', JSON.stringify(stats)); }catch(e){} }
+// ----- backpack (mochila): tudo que você toca/compra fica guardado aqui -----
+let bag={}; try{ bag=JSON.parse(localStorage.getItem('amuletoBag')||'{}')||{}; }catch(e){}
+function saveBag(){ try{ localStorage.setItem('amuletoBag', JSON.stringify(bag)); }catch(e){} }
+function bagCount(){ let n=0; for(const k in bag) n+=bag[k]; return n; }
+function collect(e){ if(!e) return; bag[e]=(bag[e]||0)+1; saveBag(); if(typeof updateBagBtn==='function') updateBagBtn(); }
 function levelInfo(){ let lvl=1, need=40, acc=0; const xp=stats.coinsEarned; while(xp>=acc+need){ acc+=need; lvl++; need=40+lvl*20; } return {lvl, into:xp-acc, need}; }
 function celebrate(){ try{ confetti.start(); setTimeout(()=>confetti.stop(),2600); }catch(e){} }
 function checkAch(){ let any=false; ACH.forEach(a=>{ if(!stats.ach.includes(a.id) && a.test(stats)){ stats.ach.push(a.id); any=true;
@@ -633,15 +661,21 @@ function makeCam(worldW,worldH){
 })();
 
 // ---------- screen flow ----------
-const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen','achScreen','missionScreen','tvScreen'];
+const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen','achScreen','missionScreen','tvScreen','bagScreen'];
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
   $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
-  $('menuBtn').classList.add('hidden'); $('coinChip').classList.add('hidden'); $('familyBtn').classList.add('hidden');
+  $('menuBtn').classList.add('hidden'); $('coinChip').classList.add('hidden'); $('familyBtn').classList.add('hidden'); $('bagBtn').classList.add('hidden');
   if(!paused) Sound.stop(); }
 function showHudButtons(){ $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
   $('menuBtn').classList.remove('hidden'); $('coinChip').classList.remove('hidden'); updateCoinUI();
-  $('familyBtn').classList.toggle('hidden', !lifeMode); }   // family button only in Modo Vida
+  $('familyBtn').classList.toggle('hidden', !lifeMode); $('bagBtn').classList.remove('hidden'); updateBagBtn(); }
+function updateBagBtn(){ const d=$('bagDot'); if(!d) return; const n=bagCount(); d.textContent=n>99?'99+':n; d.style.display=n>0?'block':'none'; }
+function renderBag(){ const g=$('bagGrid'); if(!g) return; g.innerHTML=''; const keys=Object.keys(bag).filter(k=>bag[k]>0);
+  $('bagCount').textContent=bagCount();
+  if(!keys.length){ const e=document.createElement('div'); e.id='bagEmpty'; e.textContent='Mochila vazia! Toque nas coisas pela cidade. 🧸'; g.appendChild(e); return; }
+  keys.forEach(k=>{ const c=document.createElement('div'); c.className='bagCard';
+    c.innerHTML='<div class="be">'+k+'</div><div class="bn">x'+bag[k]+'</div>'; g.appendChild(c); }); }
 function hideScreens(){ SCREENS.forEach(s=> $(s).classList.add('hidden')); }
 
 // build the amulet HUD gems (one per phase)
@@ -806,6 +840,10 @@ $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
 $('wardrobeBtn').onclick = openWardrobeInGame;
 $('familyBtn').onclick = ()=>{ Sound.sfx('click'); if(game && game.toggleFamily) game.toggleFamily(); };
 $('muteBtn').onclick  = ()=>{ const on=Sound.toggle(); $('muteBtn').textContent = on?'🔊':'🔇'; };
+// backpack: opens (pausing the game) and resumes on Voltar
+$('bagBtn').onclick = ()=>{ Sound.sfx('click'); paused=true; renderBag(); show('bagScreen'); };
+$('bagBack').onclick = ()=>{ Sound.sfx('click'); paused=false; hideScreens();
+  $('touch').classList.toggle('hidden', !currentRoam); showHudButtons(); Sound.start(); };
 let inCartoon=false;
 $('menuBtn').onclick  = ()=>{ Sound.sfx('click'); Sound.stop(); confetti.stop();
   game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden');
@@ -949,14 +987,14 @@ function drawCartoonBg(type,t){
   tree(70,H*0.74,150,'#3f8a3f'); tree(W-80,H*0.74,170,'#357a35'); tree(W*0.5,H*0.73,120,'#46924a');
 }
 function cartoonBubble(x,y,text){
-  ctx.save(); ctx.font='bold 17px Trebuchet MS';
-  const maxW=Math.min(400,W-30);
+  ctx.save(); ctx.font='bold 21px Trebuchet MS';
+  const maxW=Math.min(430,W-24);
   const words=text.split(' '); let cur=''; const lines=[];
   for(const w of words){ const test=cur?cur+' '+w:w; if(ctx.measureText(test).width>maxW-30 && cur){ lines.push(cur); cur=w; } else cur=test; }
   if(cur) lines.push(cur);
-  const lh=22, bw=Math.min(maxW, Math.max(40,...lines.map(l=>ctx.measureText(l).width))+30), bh=lines.length*lh+16;
-  const bx=clamp(x,bw/2+8,W-bw/2-8), by=Math.max(y,bh/2+44);
-  ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=2; rrect(bx-bw/2,by-bh/2,bw,bh,14); ctx.fill(); ctx.stroke();
+  const lh=26, bw=Math.min(maxW, Math.max(40,...lines.map(l=>ctx.measureText(l).width))+30), bh=lines.length*lh+18;
+  const bx=clamp(x,bw/2+8,W-bw/2-8), by=Math.max(y,bh/2+48);
+  ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=3; rrect(bx-bw/2,by-bh/2,bw,bh,16); ctx.fill(); ctx.stroke();
   const tx=clamp(x,bx-bw/2+14,bx+bw/2-14);
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(tx-8,by+bh/2-2); ctx.lineTo(tx,by+bh/2+14); ctx.lineTo(tx+8,by+bh/2-2); ctx.closePath(); ctx.fill();
   ctx.fillStyle='#222'; ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -966,10 +1004,12 @@ function cartoonBubble(x,y,text){
 function makeCartoon(start){
   let idx=start, ep=EPISODES[idx], line=0, timer=0, titleT=150, t=0;
   const LINE_FRAMES=210;
+  function speak(){ const ln=ep.lines[line]; if(ln) Sound.voice(ep.cast[ln[0]]); }   // characters "talk out loud"
   function load(i){ idx=((i%EPISODES.length)+EPISODES.length)%EPISODES.length; ep=EPISODES[idx]; line=0; timer=0; titleT=150; }
   return {
-    tap(){ if(titleT>0){ titleT=0; return; } timer=0; line++; if(line>=ep.lines.length) load(idx+1); },
-    update(){ t++; if(titleT>0){ titleT--; return; } timer++; if(timer>=LINE_FRAMES){ timer=0; line++; if(line>=ep.lines.length) load(idx+1); } },
+    tap(){ if(titleT>0){ titleT=0; speak(); return; } timer=0; line++; if(line>=ep.lines.length) load(idx+1); else speak(); },
+    update(){ t++; if(titleT>0){ titleT--; if(titleT===0) speak(); return; } timer++;
+      if(timer>=LINE_FRAMES){ timer=0; line++; if(line>=ep.lines.length) load(idx+1); else speak(); } },
     draw(){ drawCartoonBg(ep.bg,t);
       const n=ep.cast.length;
       ep.cast.forEach((c,i)=>{ const x=W*(i+1)/(n+1); const speaking=ep.lines[line]&&ep.lines[line][0]===i;
@@ -2051,14 +2091,14 @@ function phaseCity(){
   return {
     tap(x,y){ if(!inside) return;
       if(inside.shop){ for(const it of shelf){ if(Math.hypot(x-it.x,y-it.y)<30){
-        cart++; bump('foods'); it.pop=1; floaters.push({x:it.x,y:it.y-6,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); collect(it.e); it.pop=1; floaters.push({x:it.x,y:it.y-6,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
       if(inside.icecream){ for(const f of flavors){ if(Math.hypot(x-f.x,y-f.y)<32){
-        cart++; bump('foods'); f.pop=1; floaters.push({x:f.x,y:f.y-14,e:'🍦',life:1}); toast('Comprou sorvete de '+f.name+'! 🍦'); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); collect('🍦'); f.pop=1; floaters.push({x:f.x,y:f.y-14,e:'🍦',life:1}); toast('Comprou sorvete de '+f.name+'! 🍦'); Sound.sfx('collect'); return; } } }
       if(inside.diner){ for(const m of menu){ if(Math.hypot(x-m.x,y-m.y)<30){
-        cart++; bump('foods'); m.pop=1; floaters.push({x:m.x,y:m.y-12,e:m.e,life:1}); toast('Comprou '+m.name+'! '+m.e); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); collect(m.e); m.pop=1; floaters.push({x:m.x,y:m.y-12,e:m.e,life:1}); toast('Comprou '+m.name+'! '+m.e); Sound.sfx('collect'); return; } } }
       if(inside.mall){
         if(mallStore!=null){ for(const it of storeItems){ if(Math.hypot(x-it.x,y-it.y)<32){
-          cart++; it.pop=1; floaters.push({x:it.x,y:it.y-8,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
+          cart++; collect(it.e); it.pop=1; floaters.push({x:it.x,y:it.y-8,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
         else { for(let i=0;i<MALL_STORES.length;i++){ const f=mallFront(i); if(inRect(x,y,{x:f.x,y:f.y,w:84,h:160})){
           mallStore=i; initStore(MALL_STORES[i]); toast(MALL_STORES[i].emoji+' '+MALL_STORES[i].name); Sound.sfx('blip'); return; } } }
       }
@@ -2075,7 +2115,7 @@ function phaseCity(){
         } else {   // pátio
           if(inRect(x,y,SCHOOL.aulaDoor)){ schoolArea='aula'; homeAct='none'; A.x=W/2; A.y=H-150; A.vx=A.vy=0; toast('Voltando pra aula 📚'); Sound.sfx('blip'); return; }
           for(const f of schoolFood){ if(Math.hypot(x-f.x,y-f.y)<30){ f.pop=1; floaters.push({x:f.x,y:f.y-10,e:f.e,life:1});
-            bump('foods'); toast('Comeu '+f.e+' na cantina!'); Sound.sfx('collect'); return; } }
+            bump('foods'); collect(f.e); toast('Comeu '+f.e+' na cantina!'); Sound.sfx('collect'); return; } }
         }
       }
       if(inside.hospital){
@@ -2089,7 +2129,7 @@ function phaseCity(){
         else toast('Você fez carinho no '+s.name+'! 🐾');
         return; } } }
       if(inside.bakery){ for(const s of bakeList){ if(Math.hypot(x-s.x,y-s.y)<30){
-        cart++; bump('foods'); s.pop=1; floaters.push({x:s.x,y:s.y-6,e:s.e,life:1}); toast('Comprou '+s.e+'!'); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); collect(s.e); s.pop=1; floaters.push({x:s.x,y:s.y-6,e:s.e,life:1}); toast('Comprou '+s.e+'!'); Sound.sfx('collect'); return; } } }
       if(inside.cinema){ for(const s of cinemaSeats){ if(s.npc<0 && inRect(x,y,{x:s.x,y:s.y,w:62,h:74})){
         homeAct='sit'; A.x=s.x; A.y=s.y-8; A.vx=A.vy=0; toast('Assistindo o filme! 🍿'); Sound.sfx('blip'); return; } } }
       if(inside.funpark && !ride){
@@ -2099,7 +2139,7 @@ function phaseCity(){
       if(inside.props){ const ipn=inside.props.length;   // tappable themed items in the new places
         for(let i=0;i<ipn;i++){ const px=W*(i+1)/(ipn+1), py=H*0.45;
           if(Math.hypot(x-px,y-py)<34){ addCoins(1); floaters.push({x:px,y:py-14,e:inside.props[i],life:1});
-            toast(inside.props[i]+' que legal! +1 🪙'); Sound.sfx('collect'); return; } } }
+            collect(inside.props[i]); toast(inside.props[i]+' foi pra mochila! +1 🪙'); Sound.sfx('collect'); return; } } }
       if(!inside.soccer && !ride && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
       if(inside && inside.soccer){            // ===== PARK PLAYGROUND =====
