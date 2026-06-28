@@ -149,6 +149,31 @@
   #humanOutfitGrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; width:100%; max-width:300px; }
   .cc-btnrow{ display:flex; gap:12px; margin-top:8px; }
   .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
+  /* meta progression: level bar, trophies, missions */
+  .btn.alt{ background:rgba(255,255,255,.14); color:#fff; font-size:16px; padding:8px 14px; }
+  #levelBar{ position:relative; width:230px; height:26px; border-radius:14px; background:rgba(0,0,0,.35);
+    border:2px solid #ffce5466; overflow:hidden; }
+  #levelFill{ position:absolute; left:0; top:0; height:100%; width:0%;
+    background:linear-gradient(90deg,#ffd34d,#ff9f3a); transition:width .4s; }
+  #levelTxt{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-weight:bold; font-size:14px; color:#fff; text-shadow:0 1px 3px #000, 0 0 2px #000; }
+  #metaBtns{ display:flex; gap:10px; }
+  #achScreen, #missionScreen{ justify-content:flex-start; overflow-y:auto; gap:12px; padding-top:24px; }
+  #achGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:9px; width:100%; max-width:360px; }
+  .achCard{ background:rgba(255,255,255,.1); border:2px solid #ffce5455; border-radius:12px; padding:8px 4px;
+    display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .achCard.locked{ opacity:.62; border-color:rgba(255,255,255,.16); }
+  .achCard .ae{ font-size:30px; } .achCard .an{ font-size:11px; font-weight:bold; }
+  .achCard .ad{ font-size:9px; color:#cdd6e6; } .achCard .ar{ font-size:10px; color:#ffce54; font-weight:bold; }
+  #missionList{ display:flex; flex-direction:column; gap:10px; width:100%; max-width:360px; }
+  .missionCard{ display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.1);
+    border:2px solid rgba(255,255,255,.2); border-radius:14px; padding:10px 12px; }
+  .missionCard.done{ border-color:#7fe08a; background:rgba(127,224,138,.14); }
+  .missionCard .me{ font-size:30px; } .missionCard .mi{ flex:1; text-align:left; }
+  .missionCard .mn{ font-weight:bold; font-size:14px; }
+  .missionCard .mbar{ height:10px; border-radius:6px; background:rgba(0,0,0,.3); overflow:hidden; margin:4px 0; }
+  .missionCard .mfill{ height:100%; background:linear-gradient(90deg,#4ec0ff,#7fc24a); }
+  .missionCard .ms{ font-size:11px; color:#cdd6e6; }
 </style>
 </head>
 <body>
@@ -181,8 +206,28 @@
     <p>O Amuleto Dourado foi despedaçado e seus pedaços se espalharam por
        <b>9 terras</b>. Complete o desafio de cada fase para recuperar cada
        pedaço e <b>reconstruir o amuleto</b>!</p>
+    <div id="levelBar"><div id="levelFill"></div><span id="levelTxt">Nível 1</span></div>
     <button class="btn" id="startBtn">Começar aventura</button>
+    <div id="metaBtns">
+      <button class="btn alt" id="achBtn">🏆 Troféus <span id="achBtnCount">0/18</span></button>
+      <button class="btn alt" id="missionBtn">🎯 Missões</button>
+    </div>
     <p class="small">Escolha seu herói, assista à história e parta na aventura.<br>Toque / clique ou use as setas e a barra de espaço.</p>
+  </div>
+
+  <!-- CONQUISTAS / TROFÉUS -->
+  <div class="screen hidden" id="achScreen">
+    <h2>🏆 Troféus <span id="achCount">0/18</span></h2>
+    <div id="achGrid"></div>
+    <button class="btn" id="achBack">Voltar</button>
+  </div>
+
+  <!-- MISSÕES DIÁRIAS -->
+  <div class="screen hidden" id="missionScreen">
+    <h2>🎯 Missões de Hoje</h2>
+    <p class="small">Complete as missões e ganhe moedas! Volte amanhã para novas missões e o bônus diário. 🎁</p>
+    <div id="missionList"></div>
+    <button class="btn" id="missionBack">Voltar</button>
   </div>
 
   <!-- CHARACTER SELECT + WARDROBE -->
@@ -423,7 +468,74 @@ try{ coins=+(localStorage.getItem('amuletoCoins')||0)||0; }catch(e){}
 const owned = OUTFITS.map((_,i)=>i);   // all clothes free to use, no buying needed
 function saveProgress(){ try{ localStorage.setItem('amuletoCoins',coins); }catch(e){} }
 function updateCoinUI(){ document.querySelectorAll('.coinVal').forEach(e=> e.textContent=coins); }
-function addCoins(n){ coins=Math.max(0,coins+n); saveProgress(); updateCoinUI(); }
+// ===== META PROGRESSION: níveis/XP, conquistas (troféus) e missões diárias =====
+const ACH = [
+  {id:'firstPlace', icon:'🚪', name:'Primeiro Passo', desc:'Entre em 1 lugar',        test:s=>s.places.length>=1,  reward:5},
+  {id:'explorer',   icon:'🧭', name:'Explorador',     desc:'Visite 5 lugares',        test:s=>s.places.length>=5,  reward:15},
+  {id:'tourist',    icon:'🗺️', name:'Turista',        desc:'Visite 12 lugares',       test:s=>s.places.length>=12, reward:30},
+  {id:'cityMaster', icon:'🏙️', name:'Mestre da Cidade',desc:'Visite os 22 lugares',    test:s=>s.places.length>=22, reward:80},
+  {id:'coins100',   icon:'🪙', name:'Cofrinho',       desc:'Ganhe 100 moedas',        test:s=>s.coinsEarned>=100,  reward:20},
+  {id:'coins300',   icon:'💰', name:'Rico',           desc:'Ganhe 300 moedas',        test:s=>s.coinsEarned>=300,  reward:40},
+  {id:'coins800',   icon:'🤑', name:'Milionário',     desc:'Ganhe 800 moedas',        test:s=>s.coinsEarned>=800,  reward:100},
+  {id:'goals5',     icon:'⚽', name:'Artilheiro',      desc:'Faça 5 gols',             test:s=>s.goals>=5,          reward:15},
+  {id:'goals20',    icon:'🏆', name:'Craque',         desc:'Faça 20 gols',            test:s=>s.goals>=20,         reward:40},
+  {id:'nave1',      icon:'🚀', name:'Herói do Espaço',desc:'Vença a Nave',            test:s=>s.naveWins>=1,       reward:50},
+  {id:'pets1',      icon:'🐾', name:'Melhor Amigo',   desc:'Adote um bichinho',       test:s=>s.pets>=1,           reward:10},
+  {id:'pets4',      icon:'🐶', name:'Amigo dos Bichos',desc:'Adote 4 bichinhos',      test:s=>s.pets>=4,           reward:30},
+  {id:'foods10',    icon:'🍔', name:'Guloso',         desc:'Coma 10 comidas',         test:s=>s.foods>=10,         reward:20},
+  {id:'rides5',     icon:'🎡', name:'Radical',        desc:'Brinque 5x na Diversões', test:s=>s.rides>=5,          reward:20},
+  {id:'level5',     icon:'⭐', name:'Nível 5',         desc:'Chegue ao nível 5',       test:s=>s.level>=5,          reward:25},
+  {id:'level10',    icon:'🌟', name:'Nível 10',        desc:'Chegue ao nível 10',      test:s=>s.level>=10,         reward:60},
+  {id:'amulet',     icon:'🏅', name:'Amuleto Dourado',desc:'Complete a Aventura',     test:s=>s.amulet>=1,         reward:50},
+  {id:'days3',      icon:'📅', name:'Visitante Fiel',  desc:'Jogue em 3 dias',         test:s=>s.days>=3,           reward:30},
+];
+const MISSIONS = [
+  {id:'earn30', icon:'🪙', name:'Ganhe 30 moedas',       stat:'dCoins',  goal:30, reward:15},
+  {id:'visit3', icon:'🚪', name:'Visite 3 lugares',      stat:'dPlaces', goal:3,  reward:15},
+  {id:'goals3', icon:'⚽', name:'Faça 3 gols no parque', stat:'dGoals',  goal:3,  reward:15},
+  {id:'eat5',   icon:'🍔', name:'Coma 5 comidas',        stat:'dFoods',  goal:5,  reward:15},
+  {id:'pet1',   icon:'🐾', name:'Adote um bichinho',     stat:'dPets',   goal:1,  reward:20},
+  {id:'ride2',  icon:'🎡', name:'Brinque 2x na Diversões',stat:'dRides', goal:2,  reward:20},
+];
+const DEFAULT_STATS = { coinsEarned:0, level:1, places:[], goals:0, naveWins:0, pets:0, foods:0, rides:0, amulet:0,
+  days:0, ach:[], lastDay:'', missions:[], mdone:[], dCoins:0, dPlaces:0, dGoals:0, dFoods:0, dPets:0, dRides:0 };
+let stats = Object.assign({}, DEFAULT_STATS);
+try{ const s=JSON.parse(localStorage.getItem('amuletoStats')||'null'); if(s) stats=Object.assign({}, DEFAULT_STATS, s); }catch(e){}
+function saveStats(){ try{ localStorage.setItem('amuletoStats', JSON.stringify(stats)); }catch(e){} }
+function levelInfo(){ let lvl=1, need=40, acc=0; const xp=stats.coinsEarned; while(xp>=acc+need){ acc+=need; lvl++; need=40+lvl*20; } return {lvl, into:xp-acc, need}; }
+function celebrate(){ try{ confetti.start(); setTimeout(()=>confetti.stop(),2600); }catch(e){} }
+function checkAch(){ let any=false; ACH.forEach(a=>{ if(!stats.ach.includes(a.id) && a.test(stats)){ stats.ach.push(a.id); any=true;
+  coins=Math.max(0,coins+a.reward); saveProgress(); updateCoinUI();
+  toast('🏆 Conquista: '+a.name+'! +'+a.reward+' 🪙'); try{Sound.sfx('win');}catch(e){} celebrate(); } });
+  if(any){ saveStats(); if(typeof updateStartMeta==='function') updateStartMeta(); } }
+function addXp(n){ const before=levelInfo().lvl; stats.coinsEarned+=n; const li=levelInfo(); stats.level=li.lvl;
+  if(li.lvl>before){ toast('🎉 Subiu para o nível '+li.lvl+'!'); try{Sound.sfx('win');}catch(e){} celebrate(); } }
+function addDaily(key,n){ stats[key]=(stats[key]||0)+n;
+  stats.missions.forEach(mid=>{ if(stats.mdone.includes(mid)) return; const m=MISSIONS.find(x=>x.id===mid);
+    if(m && (stats[m.stat]||0)>=m.goal){ stats.mdone.push(mid); coins=Math.max(0,coins+m.reward); saveProgress(); updateCoinUI();
+      toast('🎯 Missão feita: '+m.name+'! +'+m.reward+' 🪙'); try{Sound.sfx('collect');}catch(e){} } });
+  saveStats(); }
+function bump(key,n=1){ stats[key]=(stats[key]||0)+n;
+  const dmap={goals:'dGoals',foods:'dFoods',pets:'dPets',rides:'dRides'};
+  if(dmap[key]) addDaily(dmap[key],n);
+  checkAch(); saveStats(); }
+function visitPlace(name){ if(!stats.places.includes(name)){ stats.places.push(name); addDaily('dPlaces',1); checkAch(); saveStats(); } }
+function todayStr(){ try{ return new Date().toISOString().slice(0,10); }catch(e){ return 'x'; } }
+function rollDaily(){ const day=todayStr();
+  if(stats.lastDay!==day){ stats.lastDay=day; stats.days=(stats.days||0)+1;
+    stats.dCoins=0; stats.dPlaces=0; stats.dGoals=0; stats.dFoods=0; stats.dPets=0; stats.dRides=0; stats.mdone=[];
+    const k=parseInt(day.replace(/-/g,''),10)||0;
+    stats.missions=[MISSIONS[k%MISSIONS.length].id, MISSIONS[(k+2)%MISSIONS.length].id, MISSIONS[(k+4)%MISSIONS.length].id];
+    coins=Math.max(0,coins+20); saveProgress();
+    setTimeout(()=>{ updateCoinUI(); toast('🎁 Bônus diário! +20 🪙'); }, 500);
+    checkAch(); saveStats(); }
+  if(!stats.missions || !stats.missions.length){ const k=parseInt(day.replace(/-/g,''),10)||0;
+    stats.missions=[MISSIONS[k%MISSIONS.length].id, MISSIONS[(k+2)%MISSIONS.length].id, MISSIONS[(k+4)%MISSIONS.length].id]; }
+}
+function addCoins(n){ coins=Math.max(0,coins+n);
+  if(n>0){ addXp(n); addDaily('dCoins',n); }
+  saveProgress(); updateCoinUI();
+  if(n>0){ checkAch(); saveStats(); } }
 let pieces = 0;      // amulet pieces collected
 let phase = 0;       // current phase index
 let game = null;     // active phase object {update, draw, input}
@@ -502,7 +614,7 @@ function makeCam(worldW,worldH){
 })();
 
 // ---------- screen flow ----------
-const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen'];
+const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen','achScreen','missionScreen'];
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
   $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
@@ -659,7 +771,7 @@ function closeWardrobeResume(){ inGameWardrobe=false; paused=false; hideScreens(
   $('touch').classList.toggle('hidden', !currentRoam);
   showHudButtons(); Sound.start(); }
 function nextAfterWin(){
-  if(pieces>=TOTAL){ show('finalScreen'); confetti.start(); }
+  if(pieces>=TOTAL){ bump('amulet'); show('finalScreen'); confetti.start(); }
   else { phase++; intro(); }
 }
 
@@ -670,13 +782,38 @@ $('charBtn').onclick  = ()=>{ Sound.sfx('click');
 $('introBtn').onclick = beginPhase;
 $('winBtn').onclick   = nextAfterWin;
 $('loseBtn').onclick  = beginPhase;   // retry same phase
-$('finalBtn').onclick = ()=>{ confetti.stop(); Sound.stop(); $('hud').classList.add('hidden'); show('startScreen'); };
+$('finalBtn').onclick = ()=>{ confetti.stop(); Sound.stop(); $('hud').classList.add('hidden'); updateStartMeta(); show('startScreen'); };
 $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
 $('wardrobeBtn').onclick = openWardrobeInGame;
 $('familyBtn').onclick = ()=>{ Sound.sfx('click'); if(game && game.toggleFamily) game.toggleFamily(); };
 $('muteBtn').onclick  = ()=>{ const on=Sound.toggle(); $('muteBtn').textContent = on?'🔊':'🔇'; };
 $('menuBtn').onclick  = ()=>{ Sound.sfx('click'); Sound.stop(); confetti.stop();
-  game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden'); show('startScreen'); };
+  game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden'); updateStartMeta(); show('startScreen'); };
+// ----- meta progression UI: trophies + daily missions -----
+function updateStartMeta(){ const li=levelInfo();
+  const lt=$('levelTxt'), lf=$('levelFill'); if(lt) lt.textContent='Nível '+li.lvl;
+  if(lf) lf.style.width=Math.round(li.into/li.need*100)+'%';
+  const ac=$('achBtnCount'); if(ac) ac.textContent=stats.ach.length+'/'+ACH.length; }
+function renderAch(){ const g=$('achGrid'); g.innerHTML='';
+  ACH.forEach(a=>{ const got=stats.ach.includes(a.id); const c=document.createElement('div');
+    c.className='achCard'+(got?'':' locked');
+    c.innerHTML='<div class="ae">'+(got?a.icon:'🔒')+'</div><div class="an">'+a.name+'</div>'+
+      '<div class="ad">'+a.desc+'</div>'+(got?'<div class="ar">✓</div>':'<div class="ar">+'+a.reward+'🪙</div>');
+    g.appendChild(c); });
+  $('achCount').textContent=stats.ach.length+'/'+ACH.length; }
+function renderMissions(){ const g=$('missionList'); g.innerHTML='';
+  (stats.missions||[]).forEach(mid=>{ const m=MISSIONS.find(x=>x.id===mid); if(!m) return;
+    const done=stats.mdone.includes(mid); const cur=Math.min(stats[m.stat]||0, m.goal);
+    const c=document.createElement('div'); c.className='missionCard'+(done?' done':'');
+    c.innerHTML='<div class="me">'+(done?'✅':m.icon)+'</div><div class="mi">'+
+      '<div class="mn">'+m.name+'</div>'+
+      '<div class="mbar"><div class="mfill" style="width:'+Math.round(cur/m.goal*100)+'%"></div></div>'+
+      '<div class="ms">'+cur+'/'+m.goal+'  ·  +'+m.reward+'🪙'+(done?'  ✓ feita!':'')+'</div></div>';
+    g.appendChild(c); }); }
+$('achBtn').onclick = ()=>{ Sound.sfx('click'); renderAch(); show('achScreen'); };
+$('missionBtn').onclick = ()=>{ Sound.sfx('click'); renderMissions(); show('missionScreen'); };
+$('achBack').onclick = ()=>{ Sound.sfx('click'); updateStartMeta(); show('startScreen'); };
+$('missionBack').onclick = ()=>{ Sound.sfx('click'); updateStartMeta(); show('startScreen'); };
 
 // ======================================================
 //  PHASES
@@ -1572,7 +1709,7 @@ function phaseCity(){
     else if(p.bakery){ A.x=W/2; A.y=H-150; initBakery(); }
     else if(p.cinema){ A.x=W/2; A.y=H-150; initCinema(); }
     else { A.x=W/2; A.y=H-150; }
-    addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
+    addCoins(p.coin); visitPlace(p.name); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
   function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
   const DOOR={x:W/2, y:H-92};
   function moveActor(o,acc,fr,mx,minX,maxX,minY,maxY){ o.vx*=fr; o.vy*=fr;
@@ -1582,11 +1719,11 @@ function phaseCity(){
   return {
     tap(x,y){ if(!inside) return;
       if(inside.shop){ for(const it of shelf){ if(Math.hypot(x-it.x,y-it.y)<30){
-        cart++; it.pop=1; floaters.push({x:it.x,y:it.y-6,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); it.pop=1; floaters.push({x:it.x,y:it.y-6,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
       if(inside.icecream){ for(const f of flavors){ if(Math.hypot(x-f.x,y-f.y)<32){
-        cart++; f.pop=1; floaters.push({x:f.x,y:f.y-14,e:'🍦',life:1}); toast('Comprou sorvete de '+f.name+'! 🍦'); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); f.pop=1; floaters.push({x:f.x,y:f.y-14,e:'🍦',life:1}); toast('Comprou sorvete de '+f.name+'! 🍦'); Sound.sfx('collect'); return; } } }
       if(inside.diner){ for(const m of menu){ if(Math.hypot(x-m.x,y-m.y)<30){
-        cart++; m.pop=1; floaters.push({x:m.x,y:m.y-12,e:m.e,life:1}); toast('Comprou '+m.name+'! '+m.e); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); m.pop=1; floaters.push({x:m.x,y:m.y-12,e:m.e,life:1}); toast('Comprou '+m.name+'! '+m.e); Sound.sfx('collect'); return; } } }
       if(inside.mall){
         if(mallStore!=null){ for(const it of storeItems){ if(Math.hypot(x-it.x,y-it.y)<32){
           cart++; it.pop=1; floaters.push({x:it.x,y:it.y-8,e:it.e,life:1}); toast('Comprou '+it.e+'!'); Sound.sfx('collect'); return; } } }
@@ -1606,7 +1743,7 @@ function phaseCity(){
         } else {   // pátio
           if(inRect(x,y,SCHOOL.aulaDoor)){ schoolArea='aula'; homeAct='none'; A.x=W/2; A.y=H-150; A.vx=A.vy=0; toast('Voltando pra aula 📚'); Sound.sfx('blip'); return; }
           for(const f of schoolFood){ if(Math.hypot(x-f.x,y-f.y)<30){ f.pop=1; floaters.push({x:f.x,y:f.y-10,e:f.e,life:1});
-            toast('Comeu '+f.e+' na cantina!'); Sound.sfx('collect'); return; } }
+            bump('foods'); toast('Comeu '+f.e+' na cantina!'); Sound.sfx('collect'); return; } }
         }
       }
       if(inside.hospital){
@@ -1616,11 +1753,11 @@ function phaseCity(){
       if(inside.petshop){ for(const s of petsList){ if(Math.hypot(x-s.x,y-s.y)<36){
         cart++; s.pop=1; floaters.push({x:s.x,y:s.y-22,e:'🐾',life:1}); Sound.sfx('collect');
         if(!followers.some(f=>f.kind==='pet'&&f.char===s.char) && followers.filter(f=>f.kind==='pet').length<4){
-          followers.push({char:s.char, kind:'pet', x:A.x, y:A.y, face:1, walk:0, moving:0}); toast('Adotou o '+s.name+'! Agora ele te segue 🐾'); }
+          followers.push({char:s.char, kind:'pet', x:A.x, y:A.y, face:1, walk:0, moving:0}); bump('pets'); toast('Adotou o '+s.name+'! Agora ele te segue 🐾'); }
         else toast('Você fez carinho no '+s.name+'! 🐾');
         return; } } }
       if(inside.bakery){ for(const s of bakeList){ if(Math.hypot(x-s.x,y-s.y)<30){
-        cart++; s.pop=1; floaters.push({x:s.x,y:s.y-6,e:s.e,life:1}); toast('Comprou '+s.e+'!'); Sound.sfx('collect'); return; } } }
+        cart++; bump('foods'); s.pop=1; floaters.push({x:s.x,y:s.y-6,e:s.e,life:1}); toast('Comprou '+s.e+'!'); Sound.sfx('collect'); return; } } }
       if(inside.cinema){ for(const s of cinemaSeats){ if(s.npc<0 && inRect(x,y,{x:s.x,y:s.y,w:62,h:74})){
         homeAct='sit'; A.x=s.x; A.y=s.y-8; A.vx=A.vy=0; toast('Assistindo o filme! 🍿'); Sound.sfx('blip'); return; } } }
       if(inside.funpark && !ride){
@@ -1644,14 +1781,14 @@ function phaseCity(){
         if(ball.x<20){ ball.x=20; ball.vx*=-0.7; } if(ball.x>W-20){ ball.x=W-20; ball.vx*=-0.7; }
         if(ball.y<FT+ball.r){ ball.y=FT+ball.r; ball.vy*=-0.7; }
         kick(A.x,A.y,A.vx,A.vy); kick(soccerPal.x,soccerPal.y,soccerPal.vx,soccerPal.vy);
-        if(ball.y>H-28){ if(ball.x>W/2-60&&ball.x<W/2+60){ scoreYou++; addCoins(2); toast('GOOOL! ⚽ +2 🪙'); Sound.sfx('win'); resetBall(); }
+        if(ball.y>H-28){ if(ball.x>W/2-60&&ball.x<W/2+60){ scoreYou++; bump('goals'); addCoins(2); toast('GOOOL! ⚽ +2 🪙'); Sound.sfx('win'); resetBall(); }
           else { ball.y=H-28; ball.vy*=-0.7; } }
         return;
       }
       if(inside && inside.funpark){            // ===== amusement park rides =====
         if(ride){                              // riding: 2 turns then stop
-          if(ride==='wheel'){ wheelAng+=0.05; if(wheelAng-rideStart>=Math.PI*4){ ride=null; A.x=FUN.wheel.x; A.y=FLOORY-16; addCoins(2); toast('Que volta na roda-gigante! 🎡'); Sound.sfx('collect'); } }
-          else { coAng+=0.06; if(coAng-rideStart>=Math.PI*4){ ride=null; A.x=FUN.co.x; A.y=FUN.co.y+FUN.co.ry+30; addCoins(2); toast('Uhuul, montanha-russa! 🎢'); Sound.sfx('collect'); } }
+          if(ride==='wheel'){ wheelAng+=0.05; if(wheelAng-rideStart>=Math.PI*4){ ride=null; A.x=FUN.wheel.x; A.y=FLOORY-16; bump('rides'); addCoins(2); toast('Que volta na roda-gigante! 🎡'); Sound.sfx('collect'); } }
+          else { coAng+=0.06; if(coAng-rideStart>=Math.PI*4){ ride=null; A.x=FUN.co.x; A.y=FUN.co.y+FUN.co.ry+30; bump('rides'); addCoins(2); toast('Uhuul, montanha-russa! 🎢'); Sound.sfx('collect'); } }
           return;
         }
         if(jumpQueued){ jumpQueued=false; leave(); return; }
@@ -1832,7 +1969,7 @@ function phaseSpace(){
   }
   function finishTask(){ active.task.done=true; active=null; Sound.sfx('collect');
     const left=tasks.filter(q=>!q.done).length;
-    if(left===0){ won=true; Sound.sfx('win'); confetti.start(); toast('🚀 Missão completa!'); }
+    if(left===0){ won=true; bump('naveWins'); Sound.sfx('win'); confetti.start(); toast('🚀 Missão completa!'); }
     else toast('Tarefa concluída! '+(tasks.length-left)+'/'+tasks.length); }
   function nearTask(){ for(const tk of tasks){ if(!tk.done && Math.hypot(tk.x-A.x,tk.y-A.y)<58) return tk; } return null; }
   function tapOverlay(x,y){
@@ -3106,6 +3243,7 @@ function loop(){
   }
   requestAnimationFrame(loop);
 }
+rollDaily(); updateStartMeta();   // daily bonus + missions, and fill the level bar
 loop();
 </script>
 </body>
