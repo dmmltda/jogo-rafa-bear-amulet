@@ -76,6 +76,7 @@
   #muteBtn{ left:12px; }
   #menuBtn{ left:12px; top:88px; }
   #wardrobeBtn{ right:12px; }
+  #familyBtn{ right:12px; top:88px; }
   #coinChip{ position:absolute; top:46px; left:50%; transform:translateX(-50%); z-index:7;
     background:rgba(0,0,0,.5); border:1px solid #ffce5466; color:#ffce54; font-weight:bold;
     font-size:15px; padding:5px 14px; border-radius:16px; pointer-events:none; }
@@ -164,6 +165,7 @@
   <button id="muteBtn" class="hidden iconBtn">🔊</button>
   <button id="menuBtn" class="hidden iconBtn">🏠</button>
   <button id="wardrobeBtn" class="hidden iconBtn">👕</button>
+  <button id="familyBtn" class="hidden iconBtn">👨‍👩‍👧</button>
   <div id="coinChip" class="hidden">🪙 <span class="coinVal">0</span></div>
 
   <!-- Roblox-style touch controls (free-roam phases) -->
@@ -504,10 +506,11 @@ const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
   $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
-  $('menuBtn').classList.add('hidden'); $('coinChip').classList.add('hidden');
+  $('menuBtn').classList.add('hidden'); $('coinChip').classList.add('hidden'); $('familyBtn').classList.add('hidden');
   if(!paused) Sound.stop(); }
 function showHudButtons(){ $('muteBtn').classList.remove('hidden'); $('wardrobeBtn').classList.remove('hidden');
-  $('menuBtn').classList.remove('hidden'); $('coinChip').classList.remove('hidden'); updateCoinUI(); }
+  $('menuBtn').classList.remove('hidden'); $('coinChip').classList.remove('hidden'); updateCoinUI();
+  $('familyBtn').classList.toggle('hidden', !lifeMode); }   // family button only in Modo Vida
 function hideScreens(){ SCREENS.forEach(s=> $(s).classList.add('hidden')); }
 
 // build the amulet HUD gems (one per phase)
@@ -670,6 +673,7 @@ $('loseBtn').onclick  = beginPhase;   // retry same phase
 $('finalBtn').onclick = ()=>{ confetti.stop(); Sound.stop(); $('hud').classList.add('hidden'); show('startScreen'); };
 $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
 $('wardrobeBtn').onclick = openWardrobeInGame;
+$('familyBtn').onclick = ()=>{ Sound.sfx('click'); if(game && game.toggleFamily) game.toggleFamily(); };
 $('muteBtn').onclick  = ()=>{ const on=Sound.toggle(); $('muteBtn').textContent = on?'🔊':'🔇'; };
 $('menuBtn').onclick  = ()=>{ Sound.sfx('click'); Sound.stop(); confetti.stop();
   game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden'); show('startScreen'); };
@@ -1502,6 +1506,15 @@ function phaseCity(){
   // ---- car the hero can drive around the open city ----
   const car={ x:WW/2+150, y:WH/2, vx:0, vy:0, angle:0 };
   let driving=false;
+  // ---- followers: adopted pets + the family, walking behind the hero ----
+  const n=CHARS.length;
+  const FAMILY=[(charSel+2)%n, (charSel+4)%n, (charSel+6)%n];   // mãe, pai, irmã(o)
+  let followers=[];      // {char, kind:'pet'|'family', x, y, face, walk, moving}
+  let familyOn=false;
+  function stepFollowers(){ let lx=A.x, ly=A.y;
+    for(const f of followers){ const gap=f.kind==='pet'?40:54; const dx=lx-f.x, dy=ly-f.y, d=Math.hypot(dx,dy);
+      if(d>gap){ const k=(d-gap)/d*0.32; f.x+=dx*k; f.y+=dy*k; if(Math.abs(dx)>1) f.face=dx>0?1:-1; f.walk+=Math.min(d,9)*0.05; f.moving=Math.min(d,9); }
+      else f.moving=0; lx=f.x; ly=f.y; } }
   // ---- house furniture (Casa): bed, sofa, TV ----
   const HOME={ bed:{x:W*0.70,y:250,w:162,h:92}, sofa:{x:W*0.32,y:H*0.66,w:152,h:72}, tv:{x:W*0.32,y:H*0.66-150} };
   let homeAct='none';   // 'none' | 'bed' | 'sofa' | 'sit'
@@ -1570,7 +1583,11 @@ function phaseCity(){
           if(!checked){ checked=true; addCoins(3); } toast('Consulta: você está ótimo! 🩺'); Sound.sfx('blip'); return; } }
       }
       if(inside.petshop){ for(const s of petsList){ if(Math.hypot(x-s.x,y-s.y)<36){
-        cart++; s.pop=1; floaters.push({x:s.x,y:s.y-22,e:'🐾',life:1}); toast('Você fez carinho no '+s.name+'! 🐾'); Sound.sfx('collect'); return; } } }
+        cart++; s.pop=1; floaters.push({x:s.x,y:s.y-22,e:'🐾',life:1}); Sound.sfx('collect');
+        if(!followers.some(f=>f.kind==='pet'&&f.char===s.char) && followers.filter(f=>f.kind==='pet').length<4){
+          followers.push({char:s.char, kind:'pet', x:A.x, y:A.y, face:1, walk:0, moving:0}); toast('Adotou o '+s.name+'! Agora ele te segue 🐾'); }
+        else toast('Você fez carinho no '+s.name+'! 🐾');
+        return; } } }
       if(inside.bakery){ for(const s of bakeList){ if(Math.hypot(x-s.x,y-s.y)<30){
         cart++; s.pop=1; floaters.push({x:s.x,y:s.y-6,e:s.e,life:1}); toast('Comprou '+s.e+'!'); Sound.sfx('collect'); return; } } }
       if(inside.cinema){ for(const s of cinemaSeats){ if(s.npc<0 && inRect(x,y,{x:s.x,y:s.y,w:62,h:74})){
@@ -1648,7 +1665,7 @@ function phaseCity(){
         const sp=Math.hypot(car.vx,car.vy); if(sp>9){ car.vx*=9/sp; car.vy*=9/sp; }
         car.x=clamp(car.x+car.vx,40,WW-40); car.y=clamp(car.y+car.vy,40,WH-40);
         if(sp>0.5) car.angle=Math.atan2(car.vy,car.vx);
-        A.x=car.x; A.y=car.y; cam.follow(car.x,car.y,0.12); return;
+        A.x=car.x; A.y=car.y; stepFollowers(); cam.follow(car.x,car.y,0.12); return;
       }
       const p=nearPlace();
       if(jumpQueued){ jumpQueued=false;
@@ -1657,17 +1674,23 @@ function phaseCity(){
         return;
       }
       roamStep(A,WW,WH);
+      stepFollowers();
       if(p && p!==lastPlace){ lastPlace=p; Sound.sfx('blip'); }
       if(!p) lastPlace=null;
       cam.follow(A.x,A.y,0.12);
     },
+    toggleFamily(){ familyOn=!familyOn;
+      if(familyOn){ FAMILY.forEach(c=> followers.push({char:c, kind:'family', x:A.x, y:A.y, face:1, walk:0, moving:0}));
+        toast('A família chegou! 👨‍👩‍👧'); }
+      else { followers=followers.filter(f=>f.kind!=='family'); toast('A família foi pra casa 👋'); }
+      Sound.sfx('blip'); },
     draw(){
       if(inside && inside.soccer){ drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB); return; }
       if(inside && inside.shop){ drawMarket(inside, A, DOOR, shelf, cart, floaters); return; }
       if(inside && inside.icecream){ drawIce(inside, A, DOOR, flavors, cart, floaters, iceClerk, t); return; }
       if(inside && inside.diner){ drawDiner(inside, A, DOOR, menu, seats, cart, floaters, dinerClerk, t); return; }
       if(inside && inside.home){ drawHouse(inside, A, DOOR, HOME, homeAct, t); return; }
-      if(inside && inside.school){ drawSchool(inside, A, DOOR, SCHOOL, desks, homeAct, t); return; }
+      if(inside && inside.school){ drawSchool(inside, A, DOOR, SCHOOL, desks, homeAct, t, FAMILY); return; }
       if(inside && inside.hospital){ drawHospital(inside, A, DOOR, HOSP, homeAct, t); return; }
       if(inside && inside.funpark){ drawFunpark(inside, A, DOOR, FUN, FLOORY, ride, wheelAng, coAng, t); return; }
       if(inside && inside.mall){ if(mallStore!=null) drawStore(MALL_STORES[mallStore], A, DOOR, storeItems, cart, floaters); else drawMall(MALL_STORES, A, DOOR, mallFront); return; }
@@ -1686,10 +1709,13 @@ function phaseCity(){
       const list=[];
       blds.forEach(b=> list.push({y:b.y,k:'b',o:b}));
       places.forEach(p=> list.push({y:p.y,k:'p',o:p}));
+      followers.forEach(f=> list.push({y:f.y,k:'fo',o:f}));   // pets + family trailing the hero
       if(!driving) list.push({y:car.y,k:'car'});       // parked car shown in the scene
       list.sort((a,b)=>a.y-b.y);
       for(const d of list){ if(d.k==='b') drawBuilding(d.o,d.o.x+ox,d.o.y+oy);
         else if(d.k==='p') drawPlace(d.o,d.o.x+ox,d.o.y+oy);
+        else if(d.k==='fo'){ const f=d.o; const sc=f.kind==='pet'?0.62:0.92;
+          drawChar(CHARS[f.char], f.x+ox, f.y+oy-(f.kind==='pet'?4:12), sc, f.face, 0, f.moving>0.6?f.walk:null); }
         else drawCar(car,false,ox,oy); }
       if(driving) drawCar(car,true,ox,oy); else drawRoamer(A,ox,oy);
       // prompt: enter a place, or get in the car
@@ -1702,7 +1728,7 @@ function phaseCity(){
         ctx.fillText('⤴ dirigir o carro 🚗', px, py); }
       vignette(0.30);
       banner(driving ? '🚗 Dirigindo pela cidade' : '🏙️ Modo Vida — explore a cidade');
-      hint(driving ? 'Direcional/WASD para dirigir · ⤴ desce do carro' : 'Andar · ⤴ entra nos lugares ou dirige o carro 🚗 · 👕 roupa');
+      hint(driving ? 'Direcional/WASD para dirigir · ⤴ desce do carro' : 'Andar · ⤴ entra/carro 🚗 · 👕 roupa · 👨‍👩‍👧 família');
     }
   };
 }
@@ -1734,6 +1760,9 @@ function phaseSpace(){
   for(let i=0;i<5;i++) npcs.push({ char:(charSel+i+1)%CHARS.length, x:rand(deck.x+80,deck.x+deck.w-80),
     y:rand(deck.y+80,deck.y+deck.h-80), vx:0, vy:0, face:1, walk:0, tx:0, ty:0, wait:0 });
   npcs.forEach(n=>{ n.tx=rand(deck.x+80,deck.x+deck.w-80); n.ty=rand(deck.y+80,deck.y+deck.h-80); });
+  // one crewmate is secretly the impostor
+  if(npcs.length) npcs[(charSel*3+1)%npcs.length].imp=true;
+  let impCd=300; const ghosts=[];
   cam.snap(A.x,A.y);
   const COLORS=['#ff5b5b','#4ec0ff','#7fc24a','#ffd23f'];
   // overlay panel geometry (screen space)
@@ -1785,6 +1814,8 @@ function phaseSpace(){
       for(const tk of tasks){ if(!tk.done && Math.hypot(tk.x-wx,tk.y-wy)<46){ openTask(tk); return; } }
     },
     update(){ t++; if(paused) return;
+      if(t===1) toast('👀 Cuidado: há 1 impostor na nave!');
+      for(let i=ghosts.length-1;i>=0;i--){ const g=ghosts[i]; g.y-=0.8; g.life-=0.012; if(g.life<=0) ghosts.splice(i,1); }
       if(won){ jumpQueued=false; return; }
       if(active){ jumpQueued=false;
         if(active.type==='scan' && active.started){ active.prog=Math.min(1,active.prog+0.018); if(active.prog>=1) finishTask(); }
@@ -1795,7 +1826,17 @@ function phaseSpace(){
       const sp=Math.hypot(A.vx,A.vy); if(sp>6){ A.vx*=6/sp; A.vy*=6/sp; }
       A.x=clamp(A.x+A.vx,deck.x+24,deck.x+deck.w-24); A.y=clamp(A.y+A.vy,deck.y+24,deck.y+deck.h-24);
       if(Math.abs(A.vx)>0.2) A.face=A.vx>0?1:-1; A.moving=Math.hypot(A.vx,A.vy); A.walk+=A.moving*0.18;
-      npcs.forEach(n=>{ if(n.wait>0){ n.wait--; n.vx*=0.8; n.vy*=0.8; }
+      // impostor eliminates a nearby crewmate every so often (gentle: they float away as a 👻)
+      if(impCd>0) impCd--;
+      const imp=npcs.find(c=>c.imp);
+      if(imp && impCd<=0 && npcs.length>2){ let tgt=null,best=1e9;
+        npcs.forEach(m=>{ if(m!==imp){ const d=Math.hypot(m.x-imp.x,m.y-imp.y); if(d<best){best=d;tgt=m;} } });
+        if(tgt && best<30){ ghosts.push({x:tgt.x,y:tgt.y,life:1}); npcs.splice(npcs.indexOf(tgt),1);
+          impCd=300; Sound.sfx('lose'); toast('Um tripulante sumiu... 👻'); } }
+      npcs.forEach(n=>{
+        if(n.imp){ let tgt=null,best=1e9; npcs.forEach(m=>{ if(m!==n){ const d=Math.hypot(m.x-n.x,m.y-n.y); if(d<best){best=d;tgt=m;} } });
+          if(tgt){ const dx=tgt.x-n.x, dy=tgt.y-n.y, d=Math.hypot(dx,dy)||1; n.vx+=dx/d*0.22; n.vy+=dy/d*0.22; } }
+        else if(n.wait>0){ n.wait--; n.vx*=0.8; n.vy*=0.8; }
         else { const dx=n.tx-n.x, dy=n.ty-n.y, d=Math.hypot(dx,dy)||1;
           if(d<22){ n.wait=30+((t+n.char*13)%70); n.tx=rand(deck.x+80,deck.x+deck.w-80); n.ty=rand(deck.y+80,deck.y+deck.h-80); }
           else { n.vx+=dx/d*0.2; n.vy+=dy/d*0.2; } }
@@ -1835,6 +1876,8 @@ function phaseSpace(){
       const list=[{y:A.y,me:true}]; npcs.forEach(n=> list.push({y:n.y,o:n})); list.sort((a,b)=>a.y-b.y);
       for(const d of list){ if(d.me) drawCrewmate(CHARS[charSel], A.x+ox, A.y+oy, 1, A.face, A.moving>0.4?A.walk:null);
         else drawCrewmate(CHARS[d.o.char], d.o.x+ox, d.o.y+oy, 1, d.o.face, Math.hypot(d.o.vx,d.o.vy)>0.3?d.o.walk:null); }
+      // ghosts of eliminated crewmates float up
+      ghosts.forEach(g=>{ ctx.save(); ctx.globalAlpha=Math.max(0,g.life)*0.9; emoji('👻', g.x+ox, g.y+oy, 30); ctx.restore(); });
       // use prompt
       if(!active && !won){ const tk=nearTask();
         if(tk){ const px=W/2, py=H-150; ctx.fillStyle='rgba(0,0,0,.6)'; rrect(px-140,py-18,280,34,16); ctx.fill();
@@ -1845,7 +1888,7 @@ function phaseSpace(){
       banner('🚀 Tarefas: '+done+'/'+tasks.length);
       if(active) drawTaskOverlay();
       else if(won) drawWin();
-      else hint('Ande até o ! e aperte ⤴ para fazer a tarefa');
+      else hint('Faça as tarefas (⤴ no !) · cuidado com o impostor 👻');
     }
   };
   // ---- overlay renderers (closure: read `active`) ----
@@ -2350,7 +2393,10 @@ function drawDesk(d){
   ctx.strokeStyle='#9ab'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(d.x-10,d.y+6); ctx.lineTo(d.x+6,d.y+6); ctx.moveTo(d.x-10,d.y+9); ctx.lineTo(d.x+6,d.y+9); ctx.stroke();
   ctx.strokeStyle='#ffd34d'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(d.x+8,d.y+2); ctx.lineTo(d.x+15,d.y+12); ctx.stroke();
 }
-function drawSchool(p,A,DOOR,SCHOOL,desks,act,t){
+const SCHOOL_TEACHER_LINES=['Bom dia, turma! 📚','Capriche na lição!','Muito bem! ⭐','Vamos aprender?','Que inteligente! 🍎'];
+const SCHOOL_STUDENT_LINES=['Oi! 👋','Você é demais!','Senta aqui comigo!','Que legal! 😄','Vamos brincar?'];
+const SCHOOL_FAMILY_LINES=['Eu te amo! ❤️','Tenho orgulho de você!','Caprichou hoje? 😘','Estamos aqui!','Boa aula! 🌟'];
+function drawSchool(p,A,DOOR,SCHOOL,desks,act,t,family){
   ctx.fillStyle=p.wall||'#e0efe0'; ctx.fillRect(0,0,W,H);
   ctx.fillStyle=p.floor||'#b89a6a'; ctx.fillRect(0,H*0.58,W,H*0.42);
   ctx.fillStyle='rgba(0,0,0,.06)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.58,2,H*0.42);
@@ -2381,6 +2427,18 @@ function drawSchool(p,A,DOOR,SCHOOL,desks,act,t){
     else drawRoamer(A,0,0);
   }
   if(act==='sit') drawChar(CHARS[charSel], A.x, A.y-16, 0.8, 1, 0, null);  // hero seated at its desk
+  // --- the family visiting, near the bottom corners ---
+  const fam=family||[0,1];
+  drawChar(CHARS[fam[0]], W*0.13, H*0.80, 0.9, 1, Math.sin(t*0.05)*2, null);
+  drawChar(CHARS[fam[1]], W*0.87, H*0.80, 0.9, -1, Math.sin(t*0.05+1)*2, null);
+  // --- everyone keeps chatting: one speech bubble at a time, rotating ---
+  const students=desks.filter(d=>d.npc>=0).slice(0,3);
+  const talkers=[ {x:SCHOOL.teacher.x, y:SCHOOL.teacher.y-42, lines:SCHOOL_TEACHER_LINES} ];
+  students.forEach(d=> talkers.push({x:d.x, y:d.y-58, lines:SCHOOL_STUDENT_LINES}));
+  talkers.push({x:W*0.13, y:H*0.80-50, lines:SCHOOL_FAMILY_LINES});
+  talkers.push({x:W*0.87, y:H*0.80-50, lines:SCHOOL_FAMILY_LINES});
+  const slot=Math.floor(t/110), k=slot%talkers.length, tk=talkers[k];
+  speechBubble(tk.x, tk.y, tk.lines[Math.floor(slot/talkers.length)%tk.lines.length]);
   // door
   ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-34,DOOR.y-60,68,118,8); ctx.fill();
   ctx.fillStyle='#7a5230'; rrect(DOOR.x-28,DOOR.y-54,56,106,6); ctx.fill();
@@ -2783,6 +2841,16 @@ function hint(txt){
 function emoji(ch,x,y,size){
   ctx.save(); ctx.font=size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(ch,x,y); ctx.restore();
+}
+// little cartoon speech bubble centred above (x,y)
+function speechBubble(x,y,text){
+  ctx.save(); ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const w=Math.min(W-24, ctx.measureText(text).width+22), h=26;
+  x=clamp(x, w/2+8, W-w/2-8); y=Math.max(y, h/2+8);
+  ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=2;
+  rrect(x-w/2,y-h/2,w,h,11); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(x-6,y+h/2-2); ctx.lineTo(x+1,y+h/2+9); ctx.lineTo(x+7,y+h/2-2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#222'; ctx.fillText(text,x,y); ctx.restore();
 }
 // centered word-wrapped text (assumes font/fill already set)
 function wrapText(text,cx,cy,maxW,lh){
