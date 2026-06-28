@@ -174,6 +174,16 @@
   .missionCard .mbar{ height:10px; border-radius:6px; background:rgba(0,0,0,.3); overflow:hidden; margin:4px 0; }
   .missionCard .mfill{ height:100%; background:linear-gradient(90deg,#4ec0ff,#7fc24a); }
   .missionCard .ms{ font-size:11px; color:#cdd6e6; }
+  /* cartoon episode list */
+  #tvScreen{ justify-content:flex-start; overflow-y:auto; gap:12px; padding-top:22px; }
+  #tvGrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; width:100%; max-width:380px; }
+  .epCard{ cursor:pointer; pointer-events:auto; background:rgba(255,255,255,.1);
+    border:2px solid rgba(255,255,255,.2); border-radius:14px; padding:10px 8px;
+    display:flex; align-items:center; gap:8px; text-align:left; transition:.12s; }
+  .epCard:active{ transform:scale(.97); }
+  .epCard .ee{ font-size:30px; } .epCard .ei{ flex:1; }
+  .epCard .et{ font-size:12px; font-weight:bold; line-height:1.1; }
+  .epCard .en{ font-size:10px; color:#ffce54; }
 </style>
 </head>
 <body>
@@ -208,6 +218,7 @@
        pedaço e <b>reconstruir o amuleto</b>!</p>
     <div id="levelBar"><div id="levelFill"></div><span id="levelTxt">Nível 1</span></div>
     <button class="btn" id="startBtn">Começar aventura</button>
+    <button class="btn" id="tvBtn">📺 Ver Desenhos</button>
     <div id="metaBtns">
       <button class="btn alt" id="achBtn">🏆 Troféus <span id="achBtnCount">0/18</span></button>
       <button class="btn alt" id="missionBtn">🎯 Missões</button>
@@ -220,6 +231,14 @@
     <h2>🏆 Troféus <span id="achCount">0/18</span></h2>
     <div id="achGrid"></div>
     <button class="btn" id="achBack">Voltar</button>
+  </div>
+
+  <!-- DESENHOS / SÉRIE ANIMADA -->
+  <div class="screen hidden" id="tvScreen">
+    <h2>📺 Bartolomeu e os Amigos</h2>
+    <p class="small">A série animada dos seus personagens! 20 episódios. Toque num para começar — eles tocam um atrás do outro. 🍿</p>
+    <div id="tvGrid"></div>
+    <button class="btn" id="tvBack">Voltar</button>
   </div>
 
   <!-- MISSÕES DIÁRIAS -->
@@ -614,7 +633,7 @@ function makeCam(worldW,worldH){
 })();
 
 // ---------- screen flow ----------
-const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen','achScreen','missionScreen'];
+const SCREENS=['startScreen','charScreen','humanScreen','introScreen','winScreen','loseScreen','finalScreen','achScreen','missionScreen','tvScreen'];
 function show(id){ SCREENS.forEach(s=> $(s).classList.toggle('hidden', s!==id));
   $('touch').classList.add('hidden');       // hide joystick whenever a menu is up
   $('muteBtn').classList.add('hidden'); $('wardrobeBtn').classList.add('hidden');
@@ -787,8 +806,11 @@ $('skipBtn').onclick  = ()=>{ if(game && game.skip) game.skip(); };
 $('wardrobeBtn').onclick = openWardrobeInGame;
 $('familyBtn').onclick = ()=>{ Sound.sfx('click'); if(game && game.toggleFamily) game.toggleFamily(); };
 $('muteBtn').onclick  = ()=>{ const on=Sound.toggle(); $('muteBtn').textContent = on?'🔊':'🔇'; };
+let inCartoon=false;
 $('menuBtn').onclick  = ()=>{ Sound.sfx('click'); Sound.stop(); confetti.stop();
-  game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden'); updateStartMeta(); show('startScreen'); };
+  game=null; paused=false; lifeMode=false; $('hud').classList.add('hidden');
+  if(inCartoon){ inCartoon=false; show('tvScreen'); return; }
+  updateStartMeta(); show('startScreen'); };
 // ----- meta progression UI: trophies + daily missions -----
 function updateStartMeta(){ const li=levelInfo();
   const lt=$('levelTxt'), lf=$('levelFill'); if(lt) lt.textContent='Nível '+li.lvl;
@@ -814,6 +836,170 @@ $('achBtn').onclick = ()=>{ Sound.sfx('click'); renderAch(); show('achScreen'); 
 $('missionBtn').onclick = ()=>{ Sound.sfx('click'); renderMissions(); show('missionScreen'); };
 $('achBack').onclick = ()=>{ Sound.sfx('click'); updateStartMeta(); show('startScreen'); };
 $('missionBack').onclick = ()=>{ Sound.sfx('click'); updateStartMeta(); show('startScreen'); };
+
+// ===== DESENHO ANIMADO: série "Bartolomeu e os Amigos" (20 episódios) =====
+// cast = índices de CHARS; cada fala = [índiceNoElenco, texto]
+const EPISODES=[
+ {t:'O Pote de Mel Perdido', icon:'🍯', bg:'forest', cast:[0,1,8], lines:[
+   [0,'Cadê meu pote de mel? Sumiu! 🍯'],[1,'Calma, Bartolomeu! A gente te ajuda a procurar.'],
+   [8,'Eu vi algo brilhando perto do rio! 🐸'],[0,'Então vamos lá, amigos! Que aventura!'],
+   [1,'Olha, está em cima daquela pedra!'],[0,'Achamos! Obrigado, amigos. Mel pra todos! 🍯']]},
+ {t:'A Aventura no Rio', icon:'🌊', bg:'forest', cast:[0,5,3], lines:[
+   [5,'Vamos atravessar o rio pulando nas pedras! 🐧'],[0,'Eu tenho um pouquinho de medo de água...'],
+   [3,'Não se preocupe, eu seguro a sua pata!'],[0,'Com amigos eu consigo! Pulando... 1, 2, 3!'],
+   [5,'Conseguimos! Você foi corajoso!'],[0,'Juntos a gente vence qualquer desafio! 💪']]},
+ {t:'Festa na Cidade', icon:'🎉', bg:'city', cast:[0,2,6], lines:[
+   [2,'Hoje tem festa na praça! Vai todo mundo! 🎉'],[6,'Eu trouxe balões e música!'],
+   [0,'Adoro dançar com meus amigos!'],[2,'Olha as luzes coloridas no céu!'],
+   [6,'Essa é a melhor festa de todas!'],[0,'Amizade é a maior festa que existe! ❤️']]},
+ {t:'Dia de Praia', icon:'🏖️', bg:'beach', cast:[0,1,7], lines:[
+   [7,'Que dia lindo pra brincar na areia! 🏖️'],[1,'Vamos fazer um castelo de areia gigante!'],
+   [0,'E depois um mergulho no mar!'],[7,'Cuidado com a onda! Splash! 🌊'],
+   [1,'Hahaha, que molhada divertida!'],[0,'A praia é ainda melhor com vocês!']]},
+ {t:'Viagem ao Espaço', icon:'🚀', bg:'space', cast:[0,4,5], lines:[
+   [4,'A nave está pronta para decolar! 🚀'],[0,'5... 4... 3... 2... 1... lá vamos nós!'],
+   [5,'Olha as estrelas! E aquele planeta azul!'],[4,'Tem um foguetinho passando pela janela!'],
+   [0,'O espaço é enorme e cheio de surpresas!'],[5,'Melhor passeio do universo! ✨']]},
+ {t:'O Mistério da Caverna', icon:'🔦', bg:'night', cast:[0,3,2], lines:[
+   [3,'Essa caverna é escura... liga a lanterna! 🔦'],[2,'Ouvi um barulho... o que será?'],
+   [0,'Não tenham medo, estamos juntos.'],[3,'São cristais brilhantes! Que lindos! 💎'],
+   [2,'A caverna não era assustadora, era mágica!'],[0,'O medo passa quando temos amigos! 🌟']]},
+ {t:'O Grande Jogo de Futebol', icon:'⚽', bg:'park', cast:[0,6,8], lines:[
+   [6,'Bora jogar bola no parque! ⚽'],[8,'Eu sou bom no gol! Pode chutar!'],
+   [0,'Lá vai... gooool!'],[6,'Que chute, Bartolomeu!'],
+   [8,'Joga de novo! Tô me divertindo muito!'],[0,'O importante é brincar juntos! 🏆']]},
+ {t:'O Sorvete Mágico', icon:'🍦', bg:'city', cast:[0,7,1], lines:[
+   [7,'A sorveteria abriu! Quero de morango! 🍦'],[1,'Eu quero de chocolate com granulado!'],
+   [0,'Esse sorvete brilha! Será mágico?'],[7,'Cada lambida me deixa mais feliz!'],
+   [1,'Dividir o sorvete é mais gostoso!'],[0,'Amizade é o melhor sabor! 🍨']]},
+ {t:'O Resgate do Gatinho', icon:'🐱', bg:'city', cast:[0,4,6], lines:[
+   [4,'Socorro! Tem um gatinho preso na árvore! 🐱'],[6,'A gente precisa ajudar ele!'],
+   [0,'Suba nas minhas costas, devagarzinho.'],[4,'Consegui! Peguei o gatinho!'],
+   [6,'Ele está ronronando de felicidade!'],[0,'Ajudar os outros aquece o coração! ❤️']]},
+ {t:'Acampamento na Floresta', icon:'🏕️', bg:'night', cast:[0,2,8], lines:[
+   [2,'Vamos montar a barraca aqui! 🏕️'],[8,'E acender a fogueirinha pra esquentar!'],
+   [0,'Quem quer contar uma história?'],[2,'Era uma vez três amigos muito corajosos...'],
+   [8,'Olha quantas estrelas no céu! ✨'],[0,'Dormir ao ar livre com vocês é incrível!']]},
+ {t:'A Chuva de Estrelas', icon:'🌠', bg:'night', cast:[0,1,5], lines:[
+   [1,'Hoje vai ter chuva de estrelas! 🌠'],[5,'Faz um pedido quando uma passar!'],
+   [0,'Eu desejo que a gente seja amigo pra sempre.'],[1,'Olha, lá vai uma! E outra!'],
+   [5,'Que noite mágica!'],[0,'Meu pedido já realizou: vocês estão aqui! 💫']]},
+ {t:'A Corrida Maluca', icon:'🏁', bg:'city', cast:[0,3,6], lines:[
+   [3,'Preparados para a corrida de carrinhos? 🏎️'],[6,'Eu vou ganhar! Sou super rápido!'],
+   [0,'Em suas marcas... já!'],[3,'Curva fechada! Cuidado!'],
+   [6,'Chegamos juntos na linha de chegada!'],[0,'Empate! Todos nós ganhamos diversão! 🏁']]},
+ {t:'O Tesouro Escondido', icon:'🗺️', bg:'beach', cast:[0,7,8], lines:[
+   [7,'Achei um mapa do tesouro na garrafa! 🗺️'],[8,'O X marca o lugar! É perto da palmeira!'],
+   [0,'Vamos cavar bem aqui!'],[7,'Tem uma caixa! O que será?'],
+   [8,'Conchas brilhantes e medalhas pra nós!'],[0,'O verdadeiro tesouro é a aventura! 💛']]},
+ {t:'O Robô Amigo', icon:'🤖', bg:'space', cast:[0,5,2], lines:[
+   [5,'Encontramos um robozinho na nave! 🤖'],[2,'Bip bop! Ele parece estar perdido.'],
+   [0,'Vamos ajudar ele a voltar pra casa.'],[5,'Ele aprendeu a dar risada com a gente!'],
+   [2,'Agora é nosso amigo de metal!'],[0,'Todo mundo merece um amigo! 🤝']]},
+ {t:'A Banda dos Bichos', icon:'🎸', bg:'city', cast:[0,1,3], lines:[
+   [1,'Vamos montar uma banda! Eu no violão! 🎸'],[3,'Eu na bateria! Tum tum tá!'],
+   [0,'E eu canto bem alto!'],[1,'1, 2, 3 e... música!'],
+   [3,'A galera está adorando o show!'],[0,'Fazer música com amigos é demais! 🎶']]},
+ {t:'O Aniversário Surpresa', icon:'🎂', bg:'home', cast:[0,4,7], lines:[
+   [4,'Shhh! É surpresa pro Bartolomeu! 🎂'],[7,'Esconde o bolo! Ele está chegando!'],
+   [0,'Oi amigos, o que está acontecendo?'],[4,'SURPRESA! Feliz aniversário! 🎉'],
+   [7,'Faz um pedido e assopra a velinha!'],[0,'Vocês são o melhor presente do mundo! 🥳']]},
+ {t:'A Floresta Encantada', icon:'🍄', bg:'forest', cast:[0,8,2], lines:[
+   [8,'Essa floresta tem cogumelos que brilham! 🍄'],[2,'E borboletas coloridas voando!'],
+   [0,'Que lugar mágico e cheio de vida!'],[8,'Olha, uma fada do tamanho de uma flor!'],
+   [2,'Ela está nos mostrando o caminho!'],[0,'A natureza é cheia de surpresas! 🌸']]},
+ {t:'O Herói do Dia', icon:'🦸', bg:'city', cast:[0,6,5], lines:[
+   [6,'Tem alguém precisando de ajuda na ponte! 🦸'],[5,'Rápido, vamos lá, super-amigos!'],
+   [0,'Segura firme, eu te puxo!'],[6,'Você salvou o dia, Bartolomeu!'],
+   [5,'Todo herói precisa de bons amigos!'],[0,'Qualquer um pode ser herói ajudando! 💙']]},
+ {t:'O Piquenique Perfeito', icon:'🧺', bg:'park', cast:[0,1,7], lines:[
+   [1,'Trouxe a toalha e os sanduíches! 🧺'],[7,'E eu trouxe suco e bolinhos!'],
+   [0,'Que dia perfeito no parque!'],[1,'Vamos brincar de pega-pega depois!'],
+   [7,'Olha as formiguinhas querendo migalhas!'],[0,'Dividir a comida deixa tudo mais gostoso! 🥪']]},
+ {t:'O Grande Final', icon:'🏅', bg:'city', cast:[0,HUMAN_INDEX,1,2], lines:[
+   [1,'Hoje é o grande encontro de todos os amigos! 🏅'],[2,'Veja quanta gente veio comemorar!'],
+   [1,'E olha quem chegou: você, nosso herói!'],[0,'Que bom ter você na nossa turma!'],
+   [2,'Juntos vivemos aventuras incríveis!'],[0,'E isso é só o começo! Até a próxima! 👋']]},
+];
+function drawCartoonBg(type,t){
+  if(type==='space'){ ctx.fillStyle='#0a0e1f'; ctx.fillRect(0,0,W,H);
+    for(let i=0;i<80;i++){ const sx=(i*131)%W, sy=(i*71)%Math.round(H*0.7); ctx.globalAlpha=0.3+0.6*Math.abs(Math.sin(t*0.04+i)); ctx.fillStyle='#fff'; ctx.fillRect(sx,sy,2,2); } ctx.globalAlpha=1;
+    ctx.fillStyle='#6a8bd0'; ctx.beginPath(); ctx.arc(W*0.78,108,46,0,7); ctx.fill();
+    ctx.fillStyle='#5878bb'; ctx.beginPath(); ctx.arc(W*0.73,116,12,0,7); ctx.arc(W*0.85,98,8,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=4; ctx.beginPath(); ctx.ellipse(W*0.78,108,66,16,0.4,0,7); ctx.stroke();
+    ctx.fillStyle='#1a2238'; ctx.fillRect(0,H*0.74,W,H*0.26); return; }
+  if(type==='night'){ const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1b2350'); g.addColorStop(1,'#46466e'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    for(let i=0;i<60;i++){ const sx=(i*149)%W, sy=(i*83)%Math.round(H*0.6); ctx.globalAlpha=0.3+0.6*Math.abs(Math.sin(t*0.05+i)); ctx.fillStyle='#fff'; ctx.fillRect(sx,sy,2,2);} ctx.globalAlpha=1;
+    ctx.fillStyle='#fdf6c4'; ctx.beginPath(); ctx.arc(W*0.8,98,38,0,7); ctx.fill();
+    ctx.fillStyle='#2f5a30'; ctx.fillRect(0,H*0.74,W,H*0.26); return; }
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#aee6ff'); g.addColorStop(1, type==='beach'?'#ffe9b0':'#d8f3c8'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  softSun(W*0.82,84,90,'rgba(255,240,170,.85)'); cloud(W*0.22,78,1,.9); cloud(W*0.62,118,0.8,.8);
+  if(type==='beach'){ ctx.fillStyle='#4ec0e8'; ctx.fillRect(0,H*0.55,W,H*0.17);
+    ctx.fillStyle='rgba(255,255,255,.4)'; for(let x=0;x<W;x+=40) ctx.fillRect((x+t*0.5)%W,H*0.6,18,3);
+    ctx.fillStyle='#f3e2b0'; ctx.fillRect(0,H*0.72,W,H*0.28); return; }
+  if(type==='city'){ const cols=['#c58fb0','#8fb0c5','#b0c58f','#c5b08f'];
+    for(let i=0;i<6;i++){ const bx=i*92+8, bh=120+((i*37)%90); ctx.fillStyle=cols[i%4]; ctx.fillRect(bx,H*0.72-bh,76,bh);
+      ctx.fillStyle='#fff4c2'; for(let wy=H*0.72-bh+12; wy<H*0.72-16; wy+=22) for(let wx=bx+10; wx<bx+62; wx+=20) ctx.fillRect(wx,wy,10,12); }
+    ctx.fillStyle='#6b6f78'; ctx.fillRect(0,H*0.72,W,H*0.28);
+    ctx.fillStyle='#ffd34d'; for(let x=0;x<W;x+=44) ctx.fillRect(x,H*0.82,24,5); return; }
+  if(type==='home'){ ctx.fillStyle='#f3e4c4'; ctx.fillRect(0,0,W,H*0.72); ctx.fillStyle='#caa46e'; ctx.fillRect(0,H*0.72,W,H*0.28);
+    ctx.fillStyle='#bfe2f5'; rrect(W*0.6,86,150,110,8); ctx.fill(); ctx.strokeStyle='#7a5230'; ctx.lineWidth=5; rrect(W*0.6,86,150,110,8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W*0.6+75,86); ctx.lineTo(W*0.6+75,196); ctx.moveTo(W*0.6,141); ctx.lineTo(W*0.6+150,141); ctx.stroke(); return; }
+  ctx.fillStyle= type==='park'?'#7cc06a':'#86c878'; ctx.fillRect(0,H*0.72,W,H*0.28);
+  tree(70,H*0.74,150,'#3f8a3f'); tree(W-80,H*0.74,170,'#357a35'); tree(W*0.5,H*0.73,120,'#46924a');
+}
+function cartoonBubble(x,y,text){
+  ctx.save(); ctx.font='bold 17px Trebuchet MS';
+  const maxW=Math.min(400,W-30);
+  const words=text.split(' '); let cur=''; const lines=[];
+  for(const w of words){ const test=cur?cur+' '+w:w; if(ctx.measureText(test).width>maxW-30 && cur){ lines.push(cur); cur=w; } else cur=test; }
+  if(cur) lines.push(cur);
+  const lh=22, bw=Math.min(maxW, Math.max(40,...lines.map(l=>ctx.measureText(l).width))+30), bh=lines.length*lh+16;
+  const bx=clamp(x,bw/2+8,W-bw/2-8), by=Math.max(y,bh/2+44);
+  ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=2; rrect(bx-bw/2,by-bh/2,bw,bh,14); ctx.fill(); ctx.stroke();
+  const tx=clamp(x,bx-bw/2+14,bx+bw/2-14);
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(tx-8,by+bh/2-2); ctx.lineTo(tx,by+bh/2+14); ctx.lineTo(tx+8,by+bh/2-2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#222'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  lines.forEach((l,i)=> ctx.fillText(l,bx,by-bh/2+12+i*lh));
+  ctx.restore();
+}
+function makeCartoon(start){
+  let idx=start, ep=EPISODES[idx], line=0, timer=0, titleT=150, t=0;
+  const LINE_FRAMES=210;
+  function load(i){ idx=((i%EPISODES.length)+EPISODES.length)%EPISODES.length; ep=EPISODES[idx]; line=0; timer=0; titleT=150; }
+  return {
+    tap(){ if(titleT>0){ titleT=0; return; } timer=0; line++; if(line>=ep.lines.length) load(idx+1); },
+    update(){ t++; if(titleT>0){ titleT--; return; } timer++; if(timer>=LINE_FRAMES){ timer=0; line++; if(line>=ep.lines.length) load(idx+1); } },
+    draw(){ drawCartoonBg(ep.bg,t);
+      const n=ep.cast.length;
+      ep.cast.forEach((c,i)=>{ const x=W*(i+1)/(n+1); const speaking=ep.lines[line]&&ep.lines[line][0]===i;
+        const bob=Math.sin(t*0.08+i*1.7)*3, hop=speaking?Math.abs(Math.sin(t*0.18))*7:0, face=(x<=W/2)?1:-1;
+        drawChar(CHARS[c], x, H*0.70-hop, 1.45, face, bob, (speaking&&hop>3)?'jump':null); });
+      if(ep.lines[line]){ const sp=ep.lines[line][0]; cartoonBubble(W*(sp+1)/(n+1), H*0.70-132, ep.lines[line][1]); }
+      if(titleT>0){ ctx.fillStyle='rgba(8,10,22,.82)'; ctx.fillRect(0,0,W,H);
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.font='72px serif'; ctx.fillText(ep.icon, W/2, H*0.33);
+        ctx.fillStyle='#ffce54'; ctx.font='bold 17px Trebuchet MS'; ctx.fillText('EPISÓDIO '+(idx+1)+' de '+EPISODES.length, W/2, H*0.44);
+        ctx.fillStyle='#fff'; ctx.font='bold 25px Trebuchet MS'; wrapText(ep.t, W/2, H*0.51, W-70, 30);
+        ctx.fillStyle='#9fb0cc'; ctx.font='15px Trebuchet MS'; ctx.fillText('🍿 Bartolomeu e os Amigos', W/2, H*0.62); }
+      else { ctx.save(); ctx.fillStyle='rgba(0,0,0,.45)'; rrect(10,46,W-20,30,15); ctx.fill();
+        ctx.fillStyle='#ffce54'; ctx.font='bold 14px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('📺 Ep.'+(idx+1)+': '+ep.t, W/2, 61); ctx.restore();
+        hint('Toque para continuar ▶ · 🏠 volta aos episódios'); }
+    }
+  };
+}
+function startCartoon(i){ Sound.ensure(); hideScreens(); paused=false; lifeMode=false; currentRoam=false; inCartoon=true;
+  $('hud').classList.add('hidden'); $('touch').classList.add('hidden');
+  $('menuBtn').classList.remove('hidden'); $('muteBtn').classList.remove('hidden');
+  $('wardrobeBtn').classList.add('hidden'); $('familyBtn').classList.add('hidden'); $('coinChip').classList.add('hidden');
+  Sound.start(); Sound.sfx('click'); game=makeCartoon(i); }
+(function(){ const g=$('tvGrid'); if(!g) return;
+  EPISODES.forEach((ep,i)=>{ const c=document.createElement('div'); c.className='epCard';
+    c.innerHTML='<div class="ee">'+ep.icon+'</div><div class="ei"><div class="et">'+ep.t+'</div><div class="en">Ep. '+(i+1)+'</div></div>';
+    c.onclick=()=>{ startCartoon(i); }; g.appendChild(c); }); })();
+$('tvBtn').onclick = ()=>{ Sound.sfx('click'); show('tvScreen'); };
+$('tvBack').onclick = ()=>{ Sound.sfx('click'); show('startScreen'); };
 
 // ======================================================
 //  PHASES
