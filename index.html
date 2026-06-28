@@ -1758,29 +1758,50 @@ function phaseCave(){
 }
 
 // ===================== LIFE MODE: THE CITY =====================
+// ambient overlay for the city: warm sun glow, drifting petals and gliding birds
+function cityAmbient(t){
+  const sg=ctx.createRadialGradient(W*0.82,70,30,W*0.82,70,W*0.9);
+  sg.addColorStop(0,'rgba(255,244,200,.30)'); sg.addColorStop(1,'rgba(255,244,200,0)');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<14;i++){ const px=((i*97 + t*0.6)%(W+40))-20, py=((i*53 + t*1.0 + Math.sin(t*0.03+i)*30)%(H+40))-20;
+    ctx.save(); ctx.globalAlpha=0.5; ctx.fillStyle= i%3? '#ffd1e6':'#ffffff';
+    ctx.beginPath(); ctx.ellipse(px,py,3.5,2,(i+t*0.04),0,7); ctx.fill(); ctx.restore(); }
+  for(let i=0;i<3;i++){ const bx=((i*220 + t*1.6)%(W+80))-40, by=70+i*46+Math.sin(t*0.05+i*2)*10;
+    ctx.strokeStyle='rgba(40,50,70,.55)'; ctx.lineWidth=2.5; const fl=Math.sin(t*0.25+i)*4;
+    ctx.beginPath(); ctx.moveTo(bx-7,by); ctx.quadraticCurveTo(bx-3,by-5-fl,bx,by); ctx.quadraticCurveTo(bx+3,by-5-fl,bx+7,by); ctx.stroke(); }
+}
+function shadeGrad(x0,y0,x1,y1){ const g=ctx.createLinearGradient(x0,y0,x1,y1);
+  g.addColorStop(0,'rgba(255,255,255,.18)'); g.addColorStop(0.45,'rgba(255,255,255,0)'); g.addColorStop(1,'rgba(0,0,0,.16)'); return g; }
 function drawBuilding(b,x,y){ if(x<-160||x>W+160||y<-220||y>H+60) return;
-  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+4,b.w*0.5,8,0,0,7); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,.20)'; ctx.beginPath(); ctx.ellipse(x,y+4,b.w*0.52,9,0,0,7); ctx.fill();
+  // wall + soft top-light / base-shade
   ctx.fillStyle=b.c; ctx.fillRect(x-b.w/2,y-b.h,b.w,b.h);
-  ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(x-b.w/2,y-b.h,b.w*0.4,b.h);
-  ctx.fillStyle='rgba(0,0,0,.14)'; ctx.fillRect(x-b.w/2,y-b.h,b.w,5);
-  // roof
-  ctx.fillStyle=b.roof; ctx.beginPath(); ctx.moveTo(x-b.w/2-6,y-b.h); ctx.lineTo(x,y-b.h-24); ctx.lineTo(x+b.w/2+6,y-b.h); ctx.closePath(); ctx.fill();
-  // windows
-  ctx.fillStyle='#fff4c2';
-  for(let wy=y-b.h+14; wy<y-24; wy+=24) for(let wx=x-b.w/2+12; wx<x+b.w/2-14; wx+=22){ ctx.fillRect(wx,wy,12,14);
-    ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1; ctx.strokeRect(wx,wy,12,14); }
+  ctx.fillStyle=shadeGrad(0,y-b.h,0,y); ctx.fillRect(x-b.w/2,y-b.h,b.w,b.h);
+  ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(x+b.w*0.34,y-b.h,b.w*0.16,b.h);
+  // roof + shading + ridge highlight
+  ctx.beginPath(); ctx.moveTo(x-b.w/2-6,y-b.h); ctx.lineTo(x,y-b.h-24); ctx.lineTo(x+b.w/2+6,y-b.h); ctx.closePath();
+  ctx.fillStyle=b.roof; ctx.fill(); ctx.fillStyle=shadeGrad(0,y-b.h-24,0,y-b.h); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x-b.w/2-4,y-b.h-1); ctx.lineTo(x,y-b.h-22); ctx.stroke();
+  // glowing windows
+  for(let wy=y-b.h+14; wy<y-24; wy+=24) for(let wx=x-b.w/2+12; wx<x+b.w/2-14; wx+=22){
+    ctx.fillStyle='rgba(255,236,150,.4)'; ctx.fillRect(wx-1.5,wy-1.5,15,17);
+    ctx.fillStyle='#fff4c2'; ctx.fillRect(wx,wy,12,14);
+    ctx.fillStyle='rgba(255,255,255,.45)'; ctx.fillRect(wx,wy,12,4);
+    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1; ctx.strokeRect(wx,wy,12,14); }
   // door
-  ctx.fillStyle='#5a3a1e'; ctx.fillRect(x-9,y-24,18,24);
+  ctx.fillStyle='#5a3a1e'; rrect(x-9,y-24,18,24,3); ctx.fill();
   ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(x+5,y-12,1.4,0,7); ctx.fill();
 }
 // street decorations: trees, bushes, flowers, lamps, benches, fountains, ponds...
 function drawDeco(d,x,y,t){
   const s=d.s||1;
-  if(d.type==='tree'){ ctx.fillStyle='rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(x,y+4,20*s,7*s,0,0,7); ctx.fill();
-    ctx.fillStyle='#7a5230'; ctx.fillRect(x-5*s,y-20*s,10*s,24*s);
-    ctx.fillStyle='hsl('+(108+(d.c%44))+',46%,40%)';
-    ctx.beginPath(); ctx.arc(x,y-34*s,22*s,0,7); ctx.arc(x-14*s,y-24*s,15*s,0,7); ctx.arc(x+14*s,y-24*s,15*s,0,7); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(x-8*s,y-40*s,8*s,0,7); ctx.fill(); }
+  if(d.type==='tree'){ ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+4,20*s,7*s,0,0,7); ctx.fill();
+    const tg=ctx.createLinearGradient(0,y-22*s,0,y); tg.addColorStop(0,'#8a6038'); tg.addColorStop(1,'#6a4626');
+    ctx.fillStyle=tg; ctx.fillRect(x-5*s,y-20*s,10*s,24*s);
+    const h=108+(d.c%44);
+    ctx.fillStyle='hsl('+h+',44%,32%)'; ctx.beginPath(); ctx.arc(x,y-32*s,23*s,0,7); ctx.arc(x-15*s,y-22*s,16*s,0,7); ctx.arc(x+15*s,y-22*s,16*s,0,7); ctx.fill();
+    ctx.fillStyle='hsl('+h+',48%,46%)'; ctx.beginPath(); ctx.arc(x-3*s,y-36*s,16*s,0,7); ctx.arc(x-15*s,y-25*s,11*s,0,7); ctx.arc(x+11*s,y-27*s,12*s,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x-9*s,y-40*s,7*s,0,7); ctx.fill(); }
   else if(d.type==='bush'){ ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(x,y+3,18*s,6*s,0,0,7); ctx.fill();
     ctx.fillStyle='#4f9a4a'; ctx.beginPath(); ctx.arc(x-9*s,y-6*s,11*s,0,7); ctx.arc(x+9*s,y-6*s,11*s,0,7); ctx.arc(x,y-12*s,13*s,0,7); ctx.fill();
     ctx.fillStyle='#ff6b9a'; for(let k=0;k<3;k++){ ctx.beginPath(); ctx.arc(x-8+k*8,y-12*s,2.2,0,7); ctx.fill(); } }
@@ -1827,13 +1848,15 @@ function drawPlace(p,x,y){ if(x<-180||x>W+180||y<-280||y>H+60) return;
   let bw=b.w||92, bh=b.h||80; let topY=y-bh;
   ctx.lineJoin='round';
   ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+5,bw*0.56,9,0,0,7); ctx.fill();
-  function body(ww,hh){ ww=ww||bw; const ty=y-(hh||bh);
-    ctx.fillStyle=wall; ctx.fillRect(x-ww/2,ty,ww,(hh||bh));
-    ctx.fillStyle='rgba(255,255,255,.10)'; ctx.fillRect(x-ww/2,ty,ww*0.4,(hh||bh));
-    ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(x-ww/2,ty,ww,5); }
-  function windows(n,ww){ ww=ww||bw; ctx.fillStyle=acc; ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1;
+  function body(ww,hh){ ww=ww||bw; const hT=(hh||bh), ty=y-hT;
+    ctx.fillStyle=wall; ctx.fillRect(x-ww/2,ty,ww,hT);
+    ctx.fillStyle=shadeGrad(0,ty,0,y); ctx.fillRect(x-ww/2,ty,ww,hT);
+    ctx.fillStyle='rgba(0,0,0,.08)'; ctx.fillRect(x+ww*0.32,ty,ww*0.18,hT); }
+  function windows(n,ww){ ww=ww||bw; ctx.lineWidth=1;
     const gap=ww/(n+1); for(let i=0;i<n;i++){ const wx=x-ww/2+gap*(i+1)-11;
-      ctx.fillStyle=acc; ctx.fillRect(wx,topY+16,22,22); ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.strokeRect(wx,topY+16,22,22);
+      ctx.fillStyle=acc; ctx.fillRect(wx,topY+16,22,22);
+      ctx.fillStyle='rgba(255,255,255,.4)'; ctx.fillRect(wx,topY+16,22,6);   // glass sheen
+      ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.strokeRect(wx,topY+16,22,22);
       ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(wx,topY+27); ctx.lineTo(wx+22,topY+27); ctx.moveTo(wx+11,topY+16); ctx.lineTo(wx+11,topY+38); ctx.stroke(); } }
   function dr(){ ctx.fillStyle=door; rrect(x-13,y-30,26,30,3); ctx.fill(); ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(x+7,y-15,2,0,7); ctx.fill(); }
   function awn(c1){ for(let i=0;i<bw/16+1;i++){ ctx.fillStyle=i%2?c1:'#fff'; ctx.beginPath();
@@ -2244,7 +2267,8 @@ function phaseCity(){
       if(inside && inside.cinema){ drawCinema(inside, A, DOOR, cinemaSeats, homeAct, t); return; }
       if(inside){ drawCityInterior(inside, A, DOOR, floaters, t); return; }
       const ox=-cam.x, oy=-cam.y;
-      ctx.fillStyle='#84c66f'; ctx.fillRect(0,0,W,H);    // grass
+      const grass=ctx.createLinearGradient(0,0,0,H); grass.addColorStop(0,'#8fcf78'); grass.addColorStop(1,'#7bbd66');
+      ctx.fillStyle=grass; ctx.fillRect(0,0,W,H);    // grass
       groundTufts(cam,'rgba(255,255,255,.06)',56);
       // sidewalks (concrete band under each avenue)
       ctx.fillStyle='#cdc7b8';
@@ -2299,7 +2323,8 @@ function phaseCity(){
       else if(!driving && Math.hypot(car.x-A.x,car.y-A.y)<64){ const px=W/2, py=H-150; ctx.fillStyle='rgba(0,0,0,.6)'; rrect(px-120,py-18,240,34,16); ctx.fill();
         ctx.fillStyle='#ffce54'; ctx.font='bold 16px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText('⤴ dirigir o carro 🚗', px, py); }
-      vignette(0.30);
+      cityAmbient(t);
+      vignette(0.26);
       banner(driving ? '🚗 Dirigindo pela cidade' : '🏙️ Modo Vida — explore a cidade');
       hint(driving ? 'Direcional/WASD para dirigir · ⤴ desce do carro' : 'Andar · ⤴ entra/carro 🚗 · 👕 roupa · 👨‍👩‍👧 família');
     }
