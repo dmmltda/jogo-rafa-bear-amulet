@@ -1423,7 +1423,7 @@ function drawPlace(p,x,y){ if(x<-170||x>W+170||y<-240||y>H+60) return;
   ctx.fillStyle='#fff'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.name,x,y-119);
 }
 function phaseCity(){
-  const WW=2400, WH=2000; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
+  const WW=2800, WH=2400; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
   let t=0, lastPlace=null, inside=null, cityX=0, cityY=0;
   const places=[
     {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Bem-vindo em casa! 🏠', coin:2, home:true, wall:'#f3e4c4', floor:'#caa46e'},
@@ -1438,9 +1438,19 @@ function phaseCity(){
     {x:300,y:1650,emoji:'🐾',name:'Pet Shop', msg:'Que fofura! 🐾', coin:4, petshop:true, wall:'#e8f7e0', floor:'#caa46e'},
     {x:980,y:1700,emoji:'🥐',name:'Padaria', msg:'Cheirinho de pão! 🥐', coin:3, bakery:true, wall:'#ffeccc', floor:'#caa46e'},
     {x:2160,y:920,emoji:'🎬',name:'Cinema', msg:'Hora do filme! 🎬', coin:5, cinema:true, wall:'#171430', floor:'#241a38'},
+    {x:760, y:170, emoji:'📚',name:'Biblioteca',msg:'Hora da leitura! 📚', coin:3, wall:'#efe6d6', floor:'#b89a6a', props:['📕','📗','📘','📙','📖']},
+    {x:1640,y:170, emoji:'🏦',name:'Banco',     msg:'Guardando moedas! 🏦', coin:6, wall:'#e7eef7', floor:'#cfc09a', props:['💰','🪙','💳','💵','🏧']},
+    {x:2520,y:320, emoji:'🏖️',name:'Praia',     msg:'Dia de praia! 🏖️', coin:4, wall:'#bfe9ff', floor:'#f3e2b0', props:['🐚','🏐','🩴','⛱️','🌊']},
+    {x:210, y:780, emoji:'🦁',name:'Zoológico', msg:'Olha os bichos! 🦁', coin:5, wall:'#dff0d8', floor:'#9ab87a', props:['🦁','🐘','🦒','🐵','🦓']},
+    {x:2600,y:1000,emoji:'✈️',name:'Aeroporto', msg:'Hora de viajar! ✈️', coin:5, wall:'#e3eefc', floor:'#c2c8d2', props:['✈️','🧳','🎫','🛫','🗺️']},
+    {x:1120,y:620, emoji:'🏛️',name:'Museu',     msg:'Que história! 🏛️', coin:4, wall:'#efeae0', floor:'#cbb88f', props:['🦕','🗿','🖼️','⚱️','💎']},
+    {x:560, y:1520,emoji:'🏊',name:'Piscina',   msg:'Hora de nadar! 🏊', coin:4, wall:'#bfe9ff', floor:'#7fc7e8', props:['🛟','🤽','🩱','💦','🏊']},
+    {x:2480,y:1560,emoji:'🚜',name:'Fazenda',   msg:'Na fazenda! 🚜', coin:4, wall:'#eaf6d8', floor:'#c8a86a', props:['🐮','🐔','🐷','🐑','🌽']},
+    {x:1300,y:2180,emoji:'🎪',name:'Circo',     msg:'Show do circo! 🎪', coin:6, wall:'#ffe0ee', floor:'#caa46e', props:['🤡','🎭','🎈','🤹','🦁']},
+    {x:2300,y:2160,emoji:'🚒',name:'Bombeiros', msg:'Apaga o fogo! 🚒', coin:5, wall:'#ffe3e0', floor:'#c7b0a8', props:['🚒','🧯','🔥','🚨','🪜']},
   ];
   const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
-  for(let i=0;i<44;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
+  for(let i=0;i<64;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
     if(places.some(p=>Math.hypot(p.x-x,p.y-y)<150)) continue;
     blds.push({x,y,w:rand(72,120),h:rand(74,138),c:`hsl(${(i*47)%360},42%,68%)`,roof:roofs[i%roofs.length]}); }
   cam.snap(A.x,A.y);
@@ -1561,7 +1571,7 @@ function phaseCity(){
     else if(p.petshop){ A.x=W/2; A.y=H-150; initPet(); }
     else if(p.bakery){ A.x=W/2; A.y=H-150; initBakery(); }
     else if(p.cinema){ A.x=W/2; A.y=H-150; initCinema(); }
-    else { A.x=W/2; A.y=170; }
+    else { A.x=W/2; A.y=H-150; }
     addCoins(p.coin); toast(p.msg+'  +'+p.coin+' 🪙'); Sound.sfx('collect'); }
   function leave(){ inside=null; A.x=cityX; A.y=cityY+90; A.vx=A.vy=0; lastPlace=null; Sound.sfx('blip'); }
   const DOOR={x:W/2, y:H-92};
@@ -1617,6 +1627,10 @@ function phaseCity(){
         if(Math.hypot(x-FUN.wheel.x,y-FUN.wheel.y) < FUN.wheel.r+24){ ride='wheel'; rideStart=wheelAng; toast('Subiu na roda-gigante! 🎡'); Sound.sfx('blip'); return; }
         if(Math.abs(x-FUN.co.x)<FUN.co.rx+20 && Math.abs(y-FUN.co.y)<FUN.co.ry+34){ ride='coaster'; rideStart=coAng; toast('Subiu na montanha-russa! 🎢'); Sound.sfx('blip'); return; }
       }
+      if(inside.props){ const ipn=inside.props.length;   // tappable themed items in the new places
+        for(let i=0;i<ipn;i++){ const px=W*(i+1)/(ipn+1), py=H*0.45;
+          if(Math.hypot(x-px,y-py)<34){ addCoins(1); floaters.push({x:px,y:py-14,e:inside.props[i],life:1});
+            toast(inside.props[i]+' que legal! +1 🪙'); Sound.sfx('collect'); return; } } }
       if(!inside.soccer && !ride && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
       if(inside && inside.soccer){            // ===== PARK PLAYGROUND =====
@@ -1719,7 +1733,7 @@ function phaseCity(){
       if(inside && inside.petshop){ drawPetShop(inside, A, DOOR, petsList, cart, floaters, petClerk, t); return; }
       if(inside && inside.bakery){ drawBakery(inside, A, DOOR, bakeList, cart, floaters, bakeClerk, t); return; }
       if(inside && inside.cinema){ drawCinema(inside, A, DOOR, cinemaSeats, homeAct, t); return; }
-      if(inside){ drawCityInterior(inside, A, DOOR); return; }
+      if(inside){ drawCityInterior(inside, A, DOOR, floaters, t); return; }
       const ox=-cam.x, oy=-cam.y;
       ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
       ctx.fillStyle='#6b6f78';
@@ -2647,7 +2661,7 @@ function drawHospital(p,A,DOOR,HOSP,act,t){
   hint('Toque numa cadeira para a consulta 🩺 · 🚪/⤴ sai');
 }
 // interior mini-scene of a city place
-function drawCityInterior(p, A, DOOR){
+function drawCityInterior(p, A, DOOR, floaters, t){
   ctx.fillStyle=p.wall; ctx.fillRect(0,0,W,H);                 // back wall
   ctx.fillStyle=p.floor; ctx.fillRect(0,H*0.60,W,H*0.40);      // floor
   ctx.fillStyle='rgba(0,0,0,.07)'; for(let x=0;x<W;x+=46) ctx.fillRect(x,H*0.60,2,H*0.40);
@@ -2656,8 +2670,17 @@ function drawCityInterior(p, A, DOOR){
   emoji(p.emoji, W/2, 92, 64);
   const nameW=p.name.length*11+30; ctx.fillStyle='rgba(0,0,0,.5)'; rrect(W/2-nameW/2,128,nameW,30,12); ctx.fill();
   ctx.fillStyle='#fff'; ctx.font='bold 18px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.name,W/2,143);
-  // themed items along the room
-  const ip=p.props||[]; ip.forEach((e,i)=>{ const x=W*(i+1)/(ip.length+1); emoji(e, x, H*0.45, 40); });
+  // two friends visiting the place
+  drawChar(CHARS[(charSel+2)%CHARS.length], W*0.18, H*0.74, 0.9, 1, Math.sin((t||0)*0.05)*2, null);
+  drawChar(CHARS[(charSel+5)%CHARS.length], W*0.82, H*0.74, 0.9, -1, Math.sin((t||0)*0.05+1)*2, null);
+  // themed items on little stands (tap to interact)
+  const ip=p.props||[]; ip.forEach((e,i)=>{ const x=W*(i+1)/(ip.length+1), y=H*0.45;
+    ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(x,y+24,22,6,0,0,7); ctx.fill();
+    ctx.fillStyle='#cf9e60'; rrect(x-22,y+16,44,12,4); ctx.fill();
+    ctx.fillStyle='#a87a3e'; ctx.fillRect(x-22,y+24,44,5);
+    emoji(e, x, y, 40); });
+  // rising "+coin" floaters
+  (floaters||[]).forEach(f=>{ ctx.save(); ctx.globalAlpha=Math.max(0,f.life); emoji(f.e,f.x,f.y,22); ctx.restore(); });
   // door (exit)
   ctx.fillStyle='#5a3a1e'; rrect(DOOR.x-36,DOOR.y-66,72,128,8); ctx.fill();
   ctx.fillStyle='#7a5230'; rrect(DOOR.x-30,DOOR.y-60,60,116,6); ctx.fill();
@@ -2667,7 +2690,7 @@ function drawCityInterior(p, A, DOOR){
   drawRoamer(A,0,0);
   vignette(0.34);
   banner('🚪 '+p.name);
-  hint('Ande até a porta 🚪 para sair · 👕 troca a roupa');
+  hint('Toque nas coisas ✨ +🪙 · porta 🚪 sai · 👕 troca a roupa');
 }
 
 // ===================== PHASE CONFIGS =====================
