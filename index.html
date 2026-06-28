@@ -1733,6 +1733,53 @@ function drawBuilding(b,x,y){ if(x<-160||x>W+160||y<-220||y>H+60) return;
   ctx.fillStyle='#5a3a1e'; ctx.fillRect(x-9,y-24,18,24);
   ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(x+5,y-12,1.4,0,7); ctx.fill();
 }
+// street decorations: trees, bushes, flowers, lamps, benches, fountains, ponds...
+function drawDeco(d,x,y,t){
+  const s=d.s||1;
+  if(d.type==='tree'){ ctx.fillStyle='rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(x,y+4,20*s,7*s,0,0,7); ctx.fill();
+    ctx.fillStyle='#7a5230'; ctx.fillRect(x-5*s,y-20*s,10*s,24*s);
+    ctx.fillStyle='hsl('+(108+(d.c%44))+',46%,40%)';
+    ctx.beginPath(); ctx.arc(x,y-34*s,22*s,0,7); ctx.arc(x-14*s,y-24*s,15*s,0,7); ctx.arc(x+14*s,y-24*s,15*s,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(x-8*s,y-40*s,8*s,0,7); ctx.fill(); }
+  else if(d.type==='bush'){ ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(x,y+3,18*s,6*s,0,0,7); ctx.fill();
+    ctx.fillStyle='#4f9a4a'; ctx.beginPath(); ctx.arc(x-9*s,y-6*s,11*s,0,7); ctx.arc(x+9*s,y-6*s,11*s,0,7); ctx.arc(x,y-12*s,13*s,0,7); ctx.fill();
+    ctx.fillStyle='#ff6b9a'; for(let k=0;k<3;k++){ ctx.beginPath(); ctx.arc(x-8+k*8,y-12*s,2.2,0,7); ctx.fill(); } }
+  else if(d.type==='flower'){ ctx.strokeStyle='#4f9a4a'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y-11*s); ctx.stroke();
+    const col=['#ff6b9a','#ffd23f','#7e9bff','#ff9f3a','#ffffff'][d.c%5];
+    ctx.fillStyle=col; for(let k=0;k<5;k++){ const a=k*2*Math.PI/5; ctx.beginPath(); ctx.arc(x+Math.cos(a)*5*s,y-12*s+Math.sin(a)*5*s,3.4*s,0,7); ctx.fill(); }
+    ctx.fillStyle='#ffe06b'; ctx.beginPath(); ctx.arc(x,y-12*s,2.6*s,0,7); ctx.fill(); }
+  else if(d.type==='lamp'){ ctx.fillStyle='rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(x,y+3,8,4,0,0,7); ctx.fill();
+    ctx.fillStyle='#3a3f4a'; ctx.fillRect(x-2.5,y-54,5,56); ctx.fillStyle='#2f343d'; ctx.fillRect(x-9,y-60,18,8);
+    ctx.fillStyle='rgba(255,233,140,.28)'; ctx.beginPath(); ctx.arc(x,y-56,14,0,7); ctx.fill();
+    ctx.fillStyle='#ffe9a8'; ctx.beginPath(); ctx.arc(x,y-56,6,0,7); ctx.fill(); }
+  else if(d.type==='bench'){ ctx.fillStyle='rgba(0,0,0,.14)'; ctx.fillRect(x-22,y+2,44,5);
+    ctx.fillStyle='#9a6a3a'; ctx.fillRect(x-22,y-10,44,7); ctx.fillRect(x-22,y-24,44,6);
+    ctx.fillStyle='#7a5230'; ctx.fillRect(x-20,y-3,5,12); ctx.fillRect(x+15,y-3,5,12); }
+  else if(d.type==='bin'){ ctx.fillStyle='#3f7a4a'; rrect(x-7,y-16,14,18,3); ctx.fill(); ctx.fillStyle='#356b40'; ctx.fillRect(x-8,y-18,16,4); }
+  else if(d.type==='hydrant'){ ctx.fillStyle='#e0473a'; rrect(x-5,y-14,10,16,3); ctx.fill();
+    ctx.fillStyle='#c23a2e'; ctx.fillRect(x-7,y-9,14,3); ctx.beginPath(); ctx.arc(x,y-15,5,Math.PI,0); ctx.fill(); }
+  else if(d.type==='fountain'){ ctx.fillStyle='rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(x,y+4,38*s,12*s,0,0,7); ctx.fill();
+    ctx.fillStyle='#b9b2a0'; ctx.beginPath(); ctx.ellipse(x,y,38*s,16*s,0,0,7); ctx.fill();
+    ctx.fillStyle='#79c7e8'; ctx.beginPath(); ctx.ellipse(x,y-2,30*s,12*s,0,0,7); ctx.fill();
+    ctx.fillStyle='#b9b2a0'; ctx.fillRect(x-4,y-26,8,24);
+    ctx.fillStyle='#a8e0f5'; for(let k=0;k<6;k++){ const a=k*2*Math.PI/6; ctx.beginPath(); ctx.arc(x+Math.cos(a)*9,y-22+Math.sin(t*0.1+k)*3,2.6,0,7); ctx.fill(); }
+    ctx.fillStyle='#cfeefc'; ctx.beginPath(); ctx.ellipse(x-8,y-4,6,2.5,0,0,7); ctx.fill(); }
+  else if(d.type==='pond'){ ctx.fillStyle='#5bb0d8'; ctx.beginPath(); ctx.ellipse(x,y,42*s,26*s,0,0,7); ctx.fill();
+    ctx.fillStyle='#7cc8e8'; ctx.beginPath(); ctx.ellipse(x,y-3,36*s,20*s,0,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.ellipse(x-6,y-2,12,6,0,0,7); ctx.stroke();
+    ctx.fillStyle='#4f9a4a'; ctx.beginPath(); ctx.ellipse(x+14*s,y+4,7,4,0,0,7); ctx.fill(); }
+}
+// a colourful little car for street traffic
+function drawTrafficCar(x,y,horiz,dir,col){
+  ctx.save(); ctx.translate(x,y); if(!horiz) ctx.rotate(Math.PI/2); ctx.scale(dir<0?-1:1,1);
+  ctx.fillStyle='rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(0,9,20,6,0,0,7); ctx.fill();
+  ctx.fillStyle='#222'; rrect(-17,-9,7,18,2); ctx.fill(); rrect(10,-9,7,18,2); ctx.fill();
+  ctx.fillStyle=col; rrect(-19,-9,38,18,7); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.3)'; rrect(-12,-6,9,12,3); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.88)'; rrect(2,-6,11,12,3); ctx.fill();
+  ctx.fillStyle='#ffe9a8'; ctx.beginPath(); ctx.arc(18,-4,2.4,0,7); ctx.arc(18,4,2.4,0,7); ctx.fill();
+  ctx.restore();
+}
 function drawPlace(p,x,y){ if(x<-170||x>W+170||y<-240||y>H+60) return;
   ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+4,48,9,0,0,7); ctx.fill();
   ctx.fillStyle='#efe7d4'; ctx.fillRect(x-46,y-80,92,80);
@@ -1772,10 +1819,41 @@ function phaseCity(){
     {x:1300,y:2180,emoji:'🎪',name:'Circo',     msg:'Show do circo! 🎪', coin:6, wall:'#ffe0ee', floor:'#caa46e', props:['🤡','🎭','🎈','🤹','🦁']},
     {x:2300,y:2160,emoji:'🚒',name:'Bombeiros', msg:'Apaga o fogo! 🚒', coin:5, wall:'#ffe3e0', floor:'#c7b0a8', props:['🚒','🧯','🔥','🚨','🪜']},
   ];
+  // ---- a livelier "city": roads grid, sidewalks, decorations, crowds and traffic ----
+  const ROAD=200;                                  // avenues sit on a grid every ROAD px
+  const distToRoad=(v)=>{ const m=((v%ROAD)+ROAD)%ROAD; return Math.min(m, ROAD-m); };
+  const onRoad=(x,y,m)=> distToRoad(x)<(m||40) || distToRoad(y)<(m||40);
   const blds=[]; const roofs=['#9a4b3b','#3b6b9a','#6b9a3b','#9a8b3b','#7a3b9a'];
-  for(let i=0;i<64;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
+  for(let i=0;i<70;i++){ const x=rand(70,WW-70), y=rand(70,WH-70);
+    if(onRoad(x,y,66)) continue;
     if(places.some(p=>Math.hypot(p.x-x,p.y-y)<150)) continue;
     blds.push({x,y,w:rand(72,120),h:rand(74,138),c:`hsl(${(i*47)%360},42%,68%)`,roof:roofs[i%roofs.length]}); }
+  const clearSpot=(x,y)=> !onRoad(x,y,40) && !places.some(p=>Math.hypot(p.x-x,p.y-y)<110) && !blds.some(b=>Math.hypot(b.x-x,b.y-y)<70);
+  const deco=[]; const DT=['tree','tree','tree','bush','bush','flower','flower','flower','flower','bench','bin','hydrant','fountain','pond'];
+  for(let i=0;i<320;i++){ const x=rand(60,WW-60), y=rand(60,WH-60); if(!clearSpot(x,y)) continue;
+    let type=DT[(i*7)%DT.length];
+    if((type==='fountain'||type==='pond') && deco.filter(d=>d.type===type).length>=5) type='tree';
+    deco.push({x,y,type,s:0.85+((i*13)%30)/100, c:(i*53)%360}); }
+  // lampposts hugging the sidewalks along the avenues
+  for(let gx=ROAD; gx<WW; gx+=ROAD) for(let gy=120; gy<WH; gy+=240){ deco.push({x:gx+34, y:gy, type:'lamp', s:1, c:0}); deco.push({x:gx-34, y:gy+120, type:'lamp', s:1, c:0}); }
+  // wandering townsfolk (your characters) strolling the streets
+  const town=[]; for(let i=0;i<24;i++) town.push({ char:i%CHARS.length, x:rand(80,WW-80), y:rand(80,WH-80),
+    vx:0, vy:0, face:1, walk:0, tx:rand(80,WW-80), ty:rand(80,WH-80), wait:0, spd:0.7+((i*7)%40)/100 });
+  // traffic: little cars cruising the avenues
+  const carCols=['#ff6b6b','#4ec0ff','#7fc24a','#ffd23f','#b07ee0','#ff9f3a','#f06292','#26c6da'];
+  const traffic=[]; for(let i=0;i<12;i++){ const horiz=i%2===0;
+    const lane=Math.max(1,Math.min(Math.round(WW/ROAD)-1, 1+((i*3)% (Math.round(WW/ROAD)-1))))*ROAD + (i%2?13:-13);
+    const dir=(i%4<2)?1:-1;
+    traffic.push({ horiz, lane, p:rand(0,horiz?WW:WH), dir, col:carCols[i%carCols.length], spd:1.4+((i*9)%70)/40 }); }
+  function stepCity(){
+    town.forEach(n=>{ if(n.wait>0){ n.wait--; n.vx*=0.8; n.vy*=0.8; }
+      else { const dx=n.tx-n.x, dy=n.ty-n.y, d=Math.hypot(dx,dy)||1;
+        if(d<24){ n.wait=40+((t+n.char*11)%120); n.tx=rand(80,WW-80); n.ty=rand(80,WH-80); }
+        else { n.vx+=dx/d*0.14*n.spd; n.vy+=dy/d*0.14*n.spd; } }
+      n.vx*=0.9; n.vy*=0.9; n.x=clamp(n.x+n.vx,40,WW-40); n.y=clamp(n.y+n.vy,40,WH-40);
+      if(Math.abs(n.vx)>0.1) n.face=n.vx>0?1:-1; n.walk+=Math.hypot(n.vx,n.vy)*0.18; });
+    traffic.forEach(c=>{ const len=c.horiz?WW:WH; c.p+=c.dir*c.spd*2.2; if(c.p>len+70) c.p=-70; if(c.p<-70) c.p=len+70; });
+  }
   cam.snap(A.x,A.y);
   // ---- soccer mini-game state (Parque) ----
   let ball=null, npcs=[], scoreYou=0, scoreThem=0, stations=[], soccerPal=null;
@@ -2022,7 +2100,7 @@ function phaseCity(){
         const sp=Math.hypot(car.vx,car.vy); if(sp>9){ car.vx*=9/sp; car.vy*=9/sp; }
         car.x=clamp(car.x+car.vx,40,WW-40); car.y=clamp(car.y+car.vy,40,WH-40);
         if(sp>0.5) car.angle=Math.atan2(car.vy,car.vx);
-        A.x=car.x; A.y=car.y; stepFollowers(); cam.follow(car.x,car.y,0.12); return;
+        A.x=car.x; A.y=car.y; stepFollowers(); stepCity(); cam.follow(car.x,car.y,0.12); return;
       }
       const p=nearPlace();
       if(jumpQueued){ jumpQueued=false;
@@ -2031,7 +2109,7 @@ function phaseCity(){
         return;
       }
       roamStep(A,WW,WH);
-      stepFollowers();
+      stepFollowers(); stepCity();
       if(p && p!==lastPlace){ lastPlace=p; Sound.sfx('blip'); }
       if(!p) lastPlace=null;
       cam.follow(A.x,A.y,0.12);
@@ -2058,23 +2136,47 @@ function phaseCity(){
       if(inside && inside.cinema){ drawCinema(inside, A, DOOR, cinemaSeats, homeAct, t); return; }
       if(inside){ drawCityInterior(inside, A, DOOR, floaters, t); return; }
       const ox=-cam.x, oy=-cam.y;
-      ctx.fillStyle='#7cb46a'; ctx.fillRect(0,0,W,H);    // grass
-      ctx.fillStyle='#6b6f78';
-      for(let gx=0;gx<=WW;gx+=400){ const x=gx+ox; if(x>-30&&x<W+30) ctx.fillRect(x-22,0,44,H); }
-      for(let gy=0;gy<=WH;gy+=400){ const y=gy+oy; if(y>-30&&y<H+30) ctx.fillRect(0,y-22,W,44); }
+      ctx.fillStyle='#84c66f'; ctx.fillRect(0,0,W,H);    // grass
+      groundTufts(cam,'rgba(255,255,255,.06)',56);
+      // sidewalks (concrete band under each avenue)
+      ctx.fillStyle='#cdc7b8';
+      for(let gx=0;gx<=WW;gx+=ROAD){ const x=gx+ox; if(x>-40&&x<W+40) ctx.fillRect(x-31,0,62,H); }
+      for(let gy=0;gy<=WH;gy+=ROAD){ const y=gy+oy; if(y>-40&&y<H+40) ctx.fillRect(0,y-31,W,62); }
+      // asphalt
+      ctx.fillStyle='#565b66';
+      for(let gx=0;gx<=WW;gx+=ROAD){ const x=gx+ox; if(x>-30&&x<W+30) ctx.fillRect(x-22,0,44,H); }
+      for(let gy=0;gy<=WH;gy+=ROAD){ const y=gy+oy; if(y>-30&&y<H+30) ctx.fillRect(0,y-22,W,44); }
+      // centre lane dashes
       ctx.fillStyle='#ffd34d';
-      for(let gx=0;gx<=WW;gx+=400){ const x=gx+ox; if(x>-30&&x<W+30) for(let yy=-((cam.y)%30);yy<H;yy+=30) ctx.fillRect(x-2,yy,4,14); }
-      for(let gy=0;gy<=WH;gy+=400){ const y=gy+oy; if(y>-30&&y<H+30) for(let xx=-((cam.x)%30);xx<W;xx+=30) ctx.fillRect(xx,y-2,14,4); }
+      for(let gx=0;gx<=WW;gx+=ROAD){ const x=gx+ox; if(x>-30&&x<W+30) for(let yy=-((cam.y)%34);yy<H;yy+=34) ctx.fillRect(x-2,yy,4,16); }
+      for(let gy=0;gy<=WH;gy+=ROAD){ const y=gy+oy; if(y>-30&&y<H+30) for(let xx=-((cam.x)%34);xx<W;xx+=34) ctx.fillRect(xx,y-2,16,4); }
+      // zebra crossings at each intersection
+      ctx.fillStyle='rgba(255,255,255,.85)';
+      for(let gx=0;gx<=WW;gx+=ROAD){ const x=gx+ox; if(x<-40||x>W+40) continue;
+        for(let gy=0;gy<=WH;gy+=ROAD){ const y=gy+oy; if(y<-40||y>H+40) continue;
+          for(let k=-16;k<=16;k+=8){ ctx.fillRect(x+k-2,y-40,4,15); ctx.fillRect(x+k-2,y+25,4,15);
+            ctx.fillRect(x-40,y+k-2,15,4); ctx.fillRect(x+25,y+k-2,15,4); } } }
+      // depth-sorted scene: decorations, buildings, places, townsfolk, followers, traffic, the car
       const list=[];
-      blds.forEach(b=> list.push({y:b.y,k:'b',o:b}));
-      places.forEach(p=> list.push({y:p.y,k:'p',o:p}));
-      followers.forEach(f=> list.push({y:f.y,k:'fo',o:f}));   // pets + family trailing the hero
-      if(!driving) list.push({y:car.y,k:'car'});       // parked car shown in the scene
+      deco.forEach(o=> list.push({y:o.y,k:'d',o}));
+      blds.forEach(o=> list.push({y:o.y,k:'b',o}));
+      places.forEach(o=> list.push({y:o.y,k:'p',o}));
+      town.forEach(o=> list.push({y:o.y,k:'t',o}));
+      followers.forEach(o=> list.push({y:o.y,k:'fo',o}));
+      traffic.forEach(o=> list.push({y:(o.horiz?o.lane:o.p),k:'tr',o}));
+      if(!driving) list.push({y:car.y,k:'car'});
       list.sort((a,b)=>a.y-b.y);
-      for(const d of list){ if(d.k==='b') drawBuilding(d.o,d.o.x+ox,d.o.y+oy);
-        else if(d.k==='p') drawPlace(d.o,d.o.x+ox,d.o.y+oy);
-        else if(d.k==='fo'){ const f=d.o; const sc=f.kind==='pet'?0.62:0.92;
-          drawChar(CHARS[f.char], f.x+ox, f.y+oy-(f.kind==='pet'?4:12), sc, f.face, 0, f.moving>0.6?f.walk:null); }
+      for(const d of list){ const o=d.o;
+        const wx = (d.k==='tr') ? (o.horiz?o.p:o.lane) : (d.k==='car' ? car.x : o.x);
+        const sx=wx+ox, sy=d.y+oy;
+        if(sx<-170||sx>W+170||sy<-240||sy>H+150) continue;
+        if(d.k==='d') drawDeco(o,sx,sy,t);
+        else if(d.k==='b') drawBuilding(o,sx,sy);
+        else if(d.k==='p') drawPlace(o,sx,sy);
+        else if(d.k==='t') drawChar(CHARS[o.char], sx, sy-12, 0.9, o.face, 0, (Math.hypot(o.vx,o.vy)>0.2)?o.walk:null);
+        else if(d.k==='fo'){ const sc=o.kind==='pet'?0.62:0.92;
+          drawChar(CHARS[o.char], sx, sy-(o.kind==='pet'?4:12), sc, o.face, 0, o.moving>0.6?o.walk:null); }
+        else if(d.k==='tr') drawTrafficCar(sx, sy, o.horiz, o.dir, o.col);
         else drawCar(car,false,ox,oy); }
       if(driving) drawCar(car,true,ox,oy); else drawRoamer(A,ox,oy);
       // the family chats: one speech bubble at a time, rotating between them
