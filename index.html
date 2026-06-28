@@ -1780,44 +1780,112 @@ function drawTrafficCar(x,y,horiz,dir,col){
   ctx.fillStyle='#ffe9a8'; ctx.beginPath(); ctx.arc(18,-4,2.4,0,7); ctx.arc(18,4,2.4,0,7); ctx.fill();
   ctx.restore();
 }
-function drawPlace(p,x,y){ if(x<-170||x>W+170||y<-240||y>H+60) return;
-  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+4,48,9,0,0,7); ctx.fill();
-  ctx.fillStyle='#efe7d4'; ctx.fillRect(x-46,y-80,92,80);
-  ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(x-46,y-80,92,6);
-  ctx.fillStyle='#c0563f'; ctx.beginPath(); ctx.moveTo(x-52,y-80); ctx.lineTo(x,y-108); ctx.lineTo(x+52,y-80); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#bfe2f5'; ctx.fillRect(x-32,y-60,22,22); ctx.fillRect(x+10,y-60,22,22);
-  ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1; ctx.strokeRect(x-32,y-60,22,22); ctx.strokeRect(x+10,y-60,22,22);
-  ctx.fillStyle='#6a4326'; ctx.fillRect(x-13,y-30,26,30);
-  emoji(p.emoji, x, y-92, 30);
-  const w=p.name.length*8+18; ctx.fillStyle='rgba(0,0,0,.6)'; rrect(x-w/2,y-130,w,21,8); ctx.fill();
-  ctx.fillStyle='#fff'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.name,x,y-119);
+// every place has its own building structure (roof shape, colours, themed details)
+function drawPlace(p,x,y){ if(x<-180||x>W+180||y<-280||y>H+60) return;
+  const b=p.b||{}; const shape=b.shape||'gable';
+  const wall=b.wall||'#efe7d4', roof=b.roof||'#c0563f', acc=b.acc||'#bfe2f5', door=b.door||'#6a4326';
+  let bw=b.w||92, bh=b.h||80; let topY=y-bh;
+  ctx.lineJoin='round';
+  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x,y+5,bw*0.56,9,0,0,7); ctx.fill();
+  function body(ww,hh){ ww=ww||bw; const ty=y-(hh||bh);
+    ctx.fillStyle=wall; ctx.fillRect(x-ww/2,ty,ww,(hh||bh));
+    ctx.fillStyle='rgba(255,255,255,.10)'; ctx.fillRect(x-ww/2,ty,ww*0.4,(hh||bh));
+    ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(x-ww/2,ty,ww,5); }
+  function windows(n,ww){ ww=ww||bw; ctx.fillStyle=acc; ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1;
+    const gap=ww/(n+1); for(let i=0;i<n;i++){ const wx=x-ww/2+gap*(i+1)-11;
+      ctx.fillStyle=acc; ctx.fillRect(wx,topY+16,22,22); ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.strokeRect(wx,topY+16,22,22);
+      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(wx,topY+27); ctx.lineTo(wx+22,topY+27); ctx.moveTo(wx+11,topY+16); ctx.lineTo(wx+11,topY+38); ctx.stroke(); } }
+  function dr(){ ctx.fillStyle=door; rrect(x-13,y-30,26,30,3); ctx.fill(); ctx.fillStyle='#ffd34d'; ctx.beginPath(); ctx.arc(x+7,y-15,2,0,7); ctx.fill(); }
+  function awn(c1){ for(let i=0;i<bw/16+1;i++){ ctx.fillStyle=i%2?c1:'#fff'; ctx.beginPath();
+    ctx.moveTo(x-bw/2+i*16,topY); ctx.lineTo(x-bw/2+i*16+16,topY); ctx.lineTo(x-bw/2+i*16+8,topY+15); ctx.closePath(); ctx.fill(); } }
+
+  if(shape==='flat'){ body(); windows(3); dr();
+    ctx.fillStyle=roof; ctx.fillRect(x-bw/2-4,topY-10,bw+8,12); ctx.fillStyle='rgba(0,0,0,.18)'; ctx.fillRect(x+bw/2-20,topY-22,14,12); topY-=22; }
+  else if(shape==='awning'){ body(); windows(2); dr();
+    ctx.fillStyle=roof; ctx.fillRect(x-bw/2-4,topY-8,bw+8,10); topY-=8; awn(roof); }
+  else if(shape==='dome'){ body(); windows(2); dr();
+    ctx.fillStyle=roof; ctx.beginPath(); ctx.arc(x,topY,bw*0.5,Math.PI,0); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(x-bw*0.16,topY-bw*0.16,bw*0.12,0,7); ctx.fill(); topY-=bw*0.5; }
+  else if(shape==='tower'){ bw=Math.min(bw,74); body(); windows(2);
+    const tw=bw*0.62; ctx.fillStyle=wall; ctx.fillRect(x-tw/2,topY-32,tw,34);
+    ctx.fillStyle='rgba(0,0,0,.08)'; ctx.fillRect(x-tw/2,topY-32,tw,4);
+    ctx.fillStyle=acc; ctx.fillRect(x-8,topY-24,16,16); ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=1; ctx.strokeRect(x-8,topY-24,16,16);
+    dr(); ctx.fillStyle=roof; ctx.fillRect(x-tw/2-3,topY-40,tw+6,9); topY-=40; }
+  else if(shape==='columns'){ body();
+    ctx.fillStyle='rgba(255,255,255,.78)'; const cn=5; for(let i=0;i<cn;i++){ const cx=x-bw/2+10+i*((bw-20)/(cn-1)); ctx.fillRect(cx-4,topY+8,8,bh-10); }
+    ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(x-bw/2,y-10,bw,8); dr();
+    ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-bw/2-8,topY); ctx.lineTo(x,topY-22); ctx.lineTo(x+bw/2+8,topY); ctx.closePath(); ctx.fill(); topY-=22; }
+  else if(shape==='barn'){ body();
+    ctx.fillStyle='#fff'; ctx.fillRect(x-14,y-36,28,36); ctx.strokeStyle=roof; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x-14,y-36); ctx.lineTo(x+14,y); ctx.moveTo(x+14,y-36); ctx.lineTo(x-14,y); ctx.stroke();
+    ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-bw/2-4,topY); ctx.lineTo(x-bw*0.3,topY-20); ctx.lineTo(x+bw*0.3,topY-20); ctx.lineTo(x+bw/2+4,topY);
+    ctx.lineTo(x+bw*0.3,topY-20); ctx.lineTo(x,topY-34); ctx.lineTo(x-bw*0.3,topY-20); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-bw*0.3,topY-20); ctx.lineTo(x,topY-34); ctx.lineTo(x+bw*0.3,topY-20); ctx.closePath(); ctx.fill(); topY-=34; }
+  else if(shape==='hut'){ body();
+    ctx.fillStyle=acc; ctx.fillRect(x+8,topY+14,18,bh-14); dr();
+    ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-bw/2-12,topY+4); ctx.lineTo(x,topY-26); ctx.lineTo(x+bw/2+12,topY+4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.12)'; ctx.lineWidth=1.5; for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(x+i*12,topY-18+Math.abs(i)*4); ctx.lineTo(x+i*12,topY+2); ctx.stroke(); } topY-=26; }
+  else if(shape==='tent'){ bw=b.w||104;
+    for(let i=0;i<6;i++){ ctx.fillStyle=i%2?roof:'#fff'; ctx.beginPath(); ctx.moveTo(x,topY-46);
+      ctx.lineTo(x-bw/2+i*bw/6, topY+2); ctx.lineTo(x-bw/2+(i+1)*bw/6, topY+2); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle=roof; for(let i=0;i<6;i++){ ctx.beginPath(); ctx.arc(x-bw/2+i*bw/6+bw/12, topY+2, bw/12, 0, Math.PI); ctx.fill(); }
+    ctx.fillStyle=door; rrect(x-12,y-28,24,28,4); ctx.fill();
+    ctx.strokeStyle='#caa'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,topY-46); ctx.lineTo(x,topY-58); ctx.stroke();
+    ctx.fillStyle='#ffd23f'; ctx.beginPath(); ctx.moveTo(x,topY-58); ctx.lineTo(x+14,topY-54); ctx.lineTo(x,topY-50); ctx.closePath(); ctx.fill(); topY-=58; }
+  else if(shape==='arch'){ // park / zoo gateway, with greenery behind
+    ctx.fillStyle=acc; ctx.beginPath(); ctx.arc(x-bw*0.3,y-46,26,0,7); ctx.arc(x+bw*0.3,y-46,30,0,7); ctx.arc(x,y-58,30,0,7); ctx.fill();
+    ctx.fillStyle=roof; ctx.fillRect(x-bw/2,y-46,14,46); ctx.fillRect(x+bw/2-14,y-46,14,46);
+    ctx.lineWidth=14; ctx.strokeStyle=roof; ctx.beginPath(); ctx.arc(x,y-46,bw/2-7,Math.PI,0); ctx.stroke();
+    ctx.fillStyle='#7a5230'; ctx.fillRect(x-7,y-22,14,22); topY=y-46-bw/2+7; }
+  else if(shape==='wide'){ bw=b.w||120; body();
+    ctx.fillStyle=acc; ctx.fillRect(x-bw/2+8,topY+14,bw-16,bh-26); ctx.strokeStyle='rgba(0,0,0,.15)'; ctx.lineWidth=1;
+    for(let wx=x-bw/2+18; wx<x+bw/2-12; wx+=20) ctx.strokeRect(wx,topY+14,16,bh-26);
+    ctx.fillStyle=door; rrect(x-15,y-30,30,30,3); ctx.fill();
+    ctx.fillStyle=roof; ctx.fillRect(x-bw/2-4,topY-10,bw+8,12); topY-=10; }
+  else { body(); windows(2); dr();   // gable (default house)
+    ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-bw/2-6,topY); ctx.lineTo(x,topY-28); ctx.lineTo(x+bw/2+6,topY); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.moveTo(x-bw/2-2,topY-2); ctx.lineTo(x,topY-26); ctx.lineTo(x-bw*0.1,topY-2); ctx.closePath(); ctx.fill(); topY-=28; }
+
+  // themed extra detail
+  if(b.mark==='cross'){ ctx.fillStyle='#e0473a'; ctx.fillRect(x-4,y-62,8,26); ctx.fillRect(x-13,y-53,26,8); }
+  else if(b.mark==='garage'){ ctx.fillStyle='#9aa6b0'; ctx.fillRect(x-30,y-36,60,36);
+    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x-30,y-36+i*8); ctx.lineTo(x+30,y-36+i*8); ctx.stroke(); } }
+  else if(b.mark==='marquee'){ for(let i=0;i<bw/12;i++){ ctx.fillStyle=i%2?'#ffd23f':'#ff6b6b'; ctx.beginPath(); ctx.arc(x-bw/2+6+i*12, topY+5, 3, 0,7); ctx.fill(); } }
+  else if(b.mark==='flags'){ const fc=['#ff6b6b','#4ec0ff','#ffd23f']; for(let i=0;i<3;i++){ ctx.fillStyle=fc[i]; ctx.beginPath();
+    ctx.moveTo(x-24+i*24,topY+2); ctx.lineTo(x-24+i*24+12,topY-2); ctx.lineTo(x-24+i*24,topY-6); ctx.closePath(); ctx.fill(); } }
+  else if(b.mark==='water'){ ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=2; for(let r=0;r<2;r++){ ctx.beginPath();
+    for(let xx=-bw/2+8;xx<bw/2-8;xx+=8) ctx.lineTo(x+xx, y-20-r*10+Math.sin(xx*0.3)*3); ctx.stroke(); } }
+
+  emoji(p.emoji, x, topY-14, 28);
+  const w=p.name.length*8+18; ctx.fillStyle='rgba(0,0,0,.62)'; rrect(x-w/2,topY-50,w,21,8); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.name,x,topY-39);
 }
 function phaseCity(){
   const WW=2800, WH=2400; const cam=makeCam(WW,WH); const A=mkRoamer(WW/2,WH/2);
   let t=0, lastPlace=null, inside=null, cityX=0, cityY=0;
   const places=[
-    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Bem-vindo em casa! 🏠', coin:2, home:true, wall:'#f3e4c4', floor:'#caa46e'},
-    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Hora da aula! 📚', coin:5, school:true, wall:'#e0efe0', floor:'#b89a6a'},
-    {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia! 🍦', coin:4, icecream:true, wall:'#ffe3ef', floor:'#f0d6bd'},
-    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Bem-vindo ao mercado! 🛒', coin:3, shop:true, wall:'#eef3ff', floor:'#c8b48a'},
-    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true},
-    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Bem-vindo ao hospital! 🏥', coin:3, hospital:true, wall:'#eef6ff', floor:'#dfe6ee'},
-    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Bora se divertir! 🎡', coin:6, funpark:true, wall:'#bfe3ff', floor:'#9ccf7a'},
-    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hora do lanche! 🍔', coin:4, diner:true, wall:'#fff0c2', floor:'#caa46e'},
-    {x:1550,y:1700,emoji:'🏬',name:'Shopping', msg:'Bem-vindo ao shopping! 🏬', coin:5, mall:true},
-    {x:300,y:1650,emoji:'🐾',name:'Pet Shop', msg:'Que fofura! 🐾', coin:4, petshop:true, wall:'#e8f7e0', floor:'#caa46e'},
-    {x:980,y:1700,emoji:'🥐',name:'Padaria', msg:'Cheirinho de pão! 🥐', coin:3, bakery:true, wall:'#ffeccc', floor:'#caa46e'},
-    {x:2160,y:920,emoji:'🎬',name:'Cinema', msg:'Hora do filme! 🎬', coin:5, cinema:true, wall:'#171430', floor:'#241a38'},
-    {x:760, y:170, emoji:'📚',name:'Biblioteca',msg:'Hora da leitura! 📚', coin:3, wall:'#efe6d6', floor:'#b89a6a', props:['📕','📗','📘','📙','📖']},
-    {x:1640,y:170, emoji:'🏦',name:'Banco',     msg:'Guardando moedas! 🏦', coin:6, wall:'#e7eef7', floor:'#cfc09a', props:['💰','🪙','💳','💵','🏧']},
-    {x:2520,y:320, emoji:'🏖️',name:'Praia',     msg:'Dia de praia! 🏖️', coin:4, wall:'#bfe9ff', floor:'#f3e2b0', props:['🐚','🏐','🩴','⛱️','🌊']},
-    {x:210, y:780, emoji:'🦁',name:'Zoológico', msg:'Olha os bichos! 🦁', coin:5, wall:'#dff0d8', floor:'#9ab87a', props:['🦁','🐘','🦒','🐵','🦓']},
-    {x:2600,y:1000,emoji:'✈️',name:'Aeroporto', msg:'Hora de viajar! ✈️', coin:5, wall:'#e3eefc', floor:'#c2c8d2', props:['✈️','🧳','🎫','🛫','🗺️']},
-    {x:1120,y:620, emoji:'🏛️',name:'Museu',     msg:'Que história! 🏛️', coin:4, wall:'#efeae0', floor:'#cbb88f', props:['🦕','🗿','🖼️','⚱️','💎']},
-    {x:560, y:1520,emoji:'🏊',name:'Piscina',   msg:'Hora de nadar! 🏊', coin:4, wall:'#bfe9ff', floor:'#7fc7e8', props:['🛟','🤽','🩱','💦','🏊']},
-    {x:2480,y:1560,emoji:'🚜',name:'Fazenda',   msg:'Na fazenda! 🚜', coin:4, wall:'#eaf6d8', floor:'#c8a86a', props:['🐮','🐔','🐷','🐑','🌽']},
-    {x:1300,y:2180,emoji:'🎪',name:'Circo',     msg:'Show do circo! 🎪', coin:6, wall:'#ffe0ee', floor:'#caa46e', props:['🤡','🎭','🎈','🤹','🦁']},
-    {x:2300,y:2160,emoji:'🚒',name:'Bombeiros', msg:'Apaga o fogo! 🚒', coin:5, wall:'#ffe3e0', floor:'#c7b0a8', props:['🚒','🧯','🔥','🚨','🪜']},
+    {x:380,y:360,emoji:'🏠',name:'Sua Casa', msg:'Bem-vindo em casa! 🏠', coin:2, home:true, wall:'#f3e4c4', floor:'#caa46e', b:{shape:'gable', wall:'#f3e4c4', roof:'#c0563f'}},
+    {x:1180,y:380,emoji:'🏫',name:'Escola', msg:'Hora da aula! 📚', coin:5, school:true, wall:'#e0efe0', floor:'#b89a6a', b:{shape:'gable', wall:'#e0b07a', roof:'#9a4b3b', mark:'flags'}},
+    {x:2020,y:460,emoji:'🍦',name:'Sorveteria', msg:'Que delícia! 🍦', coin:4, icecream:true, wall:'#ffe3ef', floor:'#f0d6bd', b:{shape:'awning', wall:'#ffe3ef', roof:'#ff8fb0', acc:'#ffd1e6'}},
+    {x:520,y:1180,emoji:'🏪',name:'Mercado', msg:'Bem-vindo ao mercado! 🛒', coin:3, shop:true, wall:'#eef3ff', floor:'#c8b48a', b:{shape:'awning', wall:'#eef3ff', roof:'#4ec0ff'}},
+    {x:1320,y:1240,emoji:'🌳',name:'Parque', msg:'Hora do futebol! ⚽', coin:4, soccer:true, b:{shape:'arch', acc:'#7fc24a', roof:'#5a9a32'}},
+    {x:2060,y:1420,emoji:'🏥',name:'Hospital', msg:'Bem-vindo ao hospital! 🏥', coin:3, hospital:true, wall:'#eef6ff', floor:'#dfe6ee', b:{shape:'tower', wall:'#ffffff', roof:'#e0473a', acc:'#bfe2f5', mark:'cross'}},
+    {x:880,y:880,emoji:'🎡',name:'Diversões', msg:'Bora se divertir! 🎡', coin:6, funpark:true, wall:'#bfe3ff', floor:'#9ccf7a', b:{shape:'dome', wall:'#bfe3ff', roof:'#ff9f3a', acc:'#ffd1e6', mark:'flags'}},
+    {x:1760,y:980,emoji:'🍔',name:'Lanchonete', msg:'Hora do lanche! 🍔', coin:4, diner:true, wall:'#fff0c2', floor:'#caa46e', b:{shape:'awning', wall:'#fff5e0', roof:'#e0473a'}},
+    {x:1550,y:1700,emoji:'🏬',name:'Shopping', msg:'Bem-vindo ao shopping! 🏬', coin:5, mall:true, b:{shape:'wide', wall:'#dbe9ff', roof:'#9aa6c0', acc:'#9fd0ff', w:124}},
+    {x:300,y:1650,emoji:'🐾',name:'Pet Shop', msg:'Que fofura! 🐾', coin:4, petshop:true, wall:'#e8f7e0', floor:'#caa46e', b:{shape:'awning', wall:'#e8f7e0', roof:'#6bbf59'}},
+    {x:980,y:1700,emoji:'🥐',name:'Padaria', msg:'Cheirinho de pão! 🥐', coin:3, bakery:true, wall:'#ffeccc', floor:'#caa46e', b:{shape:'awning', wall:'#ffeccc', roof:'#e0a85a'}},
+    {x:2160,y:920,emoji:'🎬',name:'Cinema', msg:'Hora do filme! 🎬', coin:5, cinema:true, wall:'#171430', floor:'#241a38', b:{shape:'wide', wall:'#2a2440', roof:'#1a1730', acc:'#3a3358', door:'#0e0b1c', w:122, mark:'marquee'}},
+    {x:760, y:170, emoji:'📚',name:'Biblioteca',msg:'Hora da leitura! 📚', coin:3, wall:'#efe6d6', floor:'#b89a6a', props:['📕','📗','📘','📙','📖'], b:{shape:'columns', wall:'#efe6d6', roof:'#a8895a'}},
+    {x:1640,y:170, emoji:'🏦',name:'Banco',     msg:'Guardando moedas! 🏦', coin:6, wall:'#e7eef7', floor:'#cfc09a', props:['💰','🪙','💳','💵','🏧'], b:{shape:'columns', wall:'#eef0f4', roof:'#9aa6b0'}},
+    {x:2520,y:320, emoji:'🏖️',name:'Praia',     msg:'Dia de praia! 🏖️', coin:4, wall:'#bfe9ff', floor:'#f3e2b0', props:['🐚','🏐','🩴','⛱️','🌊'], b:{shape:'hut', wall:'#ffe9b0', roof:'#d8a86a', acc:'#bfe2f5'}},
+    {x:210, y:780, emoji:'🦁',name:'Zoológico', msg:'Olha os bichos! 🦁', coin:5, wall:'#dff0d8', floor:'#9ab87a', props:['🦁','🐘','🦒','🐵','🦓'], b:{shape:'arch', acc:'#9ad06a', roof:'#7a5230'}},
+    {x:2600,y:1000,emoji:'✈️',name:'Aeroporto', msg:'Hora de viajar! ✈️', coin:5, wall:'#e3eefc', floor:'#c2c8d2', props:['✈️','🧳','🎫','🛫','🗺️'], b:{shape:'tower', wall:'#e3eefc', roof:'#6b9ad0', acc:'#bfe2f5'}},
+    {x:1120,y:620, emoji:'🏛️',name:'Museu',     msg:'Que história! 🏛️', coin:4, wall:'#efeae0', floor:'#cbb88f', props:['🦕','🗿','🖼️','⚱️','💎'], b:{shape:'columns', wall:'#efeae0', roof:'#cbb88f'}},
+    {x:560, y:1520,emoji:'🏊',name:'Piscina',   msg:'Hora de nadar! 🏊', coin:4, wall:'#bfe9ff', floor:'#7fc7e8', props:['🛟','🤽','🩱','💦','🏊'], b:{shape:'flat', wall:'#bfe9ff', roof:'#4ec0e8', acc:'#9fe0f5', mark:'water'}},
+    {x:2480,y:1560,emoji:'🚜',name:'Fazenda',   msg:'Na fazenda! 🚜', coin:4, wall:'#eaf6d8', floor:'#c8a86a', props:['🐮','🐔','🐷','🐑','🌽'], b:{shape:'barn', wall:'#c64a3a', roof:'#8a3a2e', acc:'#ffe3b0'}},
+    {x:1300,y:2180,emoji:'🎪',name:'Circo',     msg:'Show do circo! 🎪', coin:6, wall:'#ffe0ee', floor:'#caa46e', props:['🤡','🎭','🎈','🤹','🦁'], b:{shape:'tent', roof:'#e0473a', door:'#7a3b2a'}},
+    {x:2300,y:2160,emoji:'🚒',name:'Bombeiros', msg:'Apaga o fogo! 🚒', coin:5, wall:'#ffe3e0', floor:'#c7b0a8', props:['🚒','🧯','🔥','🚨','🪜'], b:{shape:'tower', wall:'#e0473a', roof:'#b23a2e', acc:'#ffd1cc', mark:'garage'}},
   ];
   // ---- a livelier "city": roads grid, sidewalks, decorations, crowds and traffic ----
   const ROAD=200;                                  // avenues sit on a grid every ROAD px
