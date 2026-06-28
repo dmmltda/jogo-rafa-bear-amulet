@@ -1445,12 +1445,15 @@ function phaseCity(){
     blds.push({x,y,w:rand(72,120),h:rand(74,138),c:`hsl(${(i*47)%360},42%,68%)`,roof:roofs[i%roofs.length]}); }
   cam.snap(A.x,A.y);
   // ---- soccer mini-game state (Parque) ----
-  let ball=null, npcs=[], scoreYou=0, scoreThem=0;
+  let ball=null, npcs=[], scoreYou=0, scoreThem=0, stations=[], soccerPal=null;
   const FT=120, FB=H-70;                       // field top/bottom
-  function resetBall(){ ball={x:W/2,y:H/2,vx:0,vy:0,r:13}; }
-  function initSoccer(){ resetBall(); scoreYou=0; scoreThem=0; npcs=[];
-    for(let i=0;i<3;i++) npcs.push({ x:rand(80,W-80), y:rand(FT+40,FB-40), vx:0, vy:0, face:1, walk:0,
-      char:(charSel+1+i)%CHARS.length }); }
+  function resetBall(){ ball={x:W/2,y:H*0.70,vx:0,vy:0,r:13}; }
+  // park playground: each friend plays at a different station; one plays soccer with you
+  const STATION_POS={ swing:{x:108,y:250}, slide:{x:412,y:250}, seesaw:{x:118,y:470}, sandbox:{x:412,y:478}, rope:{x:265,y:362} };
+  function initSoccer(){ resetBall(); scoreYou=0; scoreThem=0; npcs=[]; stations=[];
+    const types=['swing','slide','seesaw','sandbox','rope'];
+    types.forEach((tp,i)=> stations.push({ type:tp, char:(charSel+1+i)%CHARS.length, x:STATION_POS[tp].x, y:STATION_POS[tp].y, ph:i*1.3 }));
+    soccerPal={ x:W*0.66, y:H*0.80, vx:0, vy:0, face:1, walk:0, char:(charSel+6)%CHARS.length }; }
   function kick(px,py,pvx,pvy){ const dx=ball.x-px, dy=ball.y-py; const d=Math.hypot(dx,dy);
     if(d<ball.r+19){ const nx=dx/(d||1), ny=dy/(d||1); const power=4.2+Math.hypot(pvx,pvy)*0.9;
       ball.vx=nx*power+pvx*0.5; ball.vy=ny*power+pvy*0.5; ball.x=px+nx*(ball.r+19); ball.y=py+ny*(ball.r+19); Sound.sfx('jump'); } }
@@ -1535,7 +1538,7 @@ function phaseCity(){
     pos.forEach((p,i)=> desks.push({x:p[0], y:p[1], npc: i===1 ? -1 : (charSel+i+2)%CHARS.length })); }
   function nearPlace(){ for(const p of places){ if(Math.hypot(p.x-A.x,p.y-A.y)<78) return p; } return null; }
   function enter(p){ inside=p; cityX=A.x; cityY=A.y; A.vx=A.vy=0; A.hopY=0; A.onGround=true;
-    if(p.soccer){ A.x=W*0.3; A.y=H*0.5; initSoccer(); }
+    if(p.soccer){ A.x=W/2; A.y=H-130; initSoccer(); }
     else if(p.shop){ A.x=W/2; A.y=H-150; initMarket(); }
     else if(p.icecream){ A.x=W/2; A.y=H-150; initIce(); }
     else if(p.diner){ A.x=W/2; A.y=H-150; initDiner(); }
@@ -1598,21 +1601,19 @@ function phaseCity(){
       }
       if(!inside.soccer && !ride && Math.hypot(x-DOOR.x,y-DOOR.y)<48) leave(); },
     update(){ t++; if(paused) return;
-      if(inside && inside.soccer){            // ===== PARK SOCCER =====
+      if(inside && inside.soccer){            // ===== PARK PLAYGROUND =====
         if(jumpQueued){ jumpQueued=false; leave(); return; }
         const ax=readAxis(); A.vx+=ax.x*0.95; A.vy+=ax.y*0.95;
-        moveActor(A,0,0.82,5.2,28,W-28,FT+10,FB-10);
-        npcs.forEach(n=>{ const dx=ball.x-n.x, dy=ball.y-n.y, d=Math.hypot(dx,dy)||1;
-          n.vx+=dx/d*0.28; n.vy+=dy/d*0.28; moveActor(n,0,0.9,3.3,28,W-28,FT+10,FB-10); });
+        moveActor(A,0,0.82,5.2,26,W-26,FT+10,H-26);
+        // one friend kicks the ball around with you (stays in the lower soccer corner)
+        const dx=ball.x-soccerPal.x, dy=ball.y-soccerPal.y, d=Math.hypot(dx,dy)||1;
+        soccerPal.vx+=dx/d*0.2; soccerPal.vy+=dy/d*0.2; moveActor(soccerPal,0,0.9,2.8,W*0.30,W-26,H*0.55,H-26);
         ball.x+=ball.vx; ball.y+=ball.vy; ball.vx*=0.975; ball.vy*=0.975;
+        if(ball.x<20){ ball.x=20; ball.vx*=-0.7; } if(ball.x>W-20){ ball.x=W-20; ball.vx*=-0.7; }
         if(ball.y<FT+ball.r){ ball.y=FT+ball.r; ball.vy*=-0.7; }
-        if(ball.y>FB-ball.r){ ball.y=FB-ball.r; ball.vy*=-0.7; }
-        kick(A.x,A.y,A.vx,A.vy); npcs.forEach(n=>kick(n.x,n.y,n.vx,n.vy));
-        const gTop=H*0.5-72, gBot=H*0.5+72;
-        if(ball.x<26){ if(ball.y>gTop&&ball.y<gBot){ scoreThem++; toast('Gol dos amigos! 🥅'); Sound.sfx('lose'); resetBall(); }
-          else { ball.x=26; ball.vx*=-0.7; } }
-        if(ball.x>W-26){ if(ball.y>gTop&&ball.y<gBot){ scoreYou++; addCoins(3); toast('GOOOL! ⚽ +3 🪙'); Sound.sfx('win'); resetBall(); }
-          else { ball.x=W-26; ball.vx*=-0.7; } }
+        kick(A.x,A.y,A.vx,A.vy); kick(soccerPal.x,soccerPal.y,soccerPal.vx,soccerPal.vy);
+        if(ball.y>H-28){ if(ball.x>W/2-60&&ball.x<W/2+60){ scoreYou++; addCoins(2); toast('GOOOL! ⚽ +2 🪙'); Sound.sfx('win'); resetBall(); }
+          else { ball.y=H-28; ball.vy*=-0.7; } }
         return;
       }
       if(inside && inside.funpark){            // ===== amusement park rides =====
@@ -1685,7 +1686,7 @@ function phaseCity(){
       else { followers=followers.filter(f=>f.kind!=='family'); toast('A família foi pra casa 👋'); }
       Sound.sfx('blip'); },
     draw(){
-      if(inside && inside.soccer){ drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB); return; }
+      if(inside && inside.soccer){ drawPark(A,stations,ball,soccerPal,scoreYou,FT,t); return; }
       if(inside && inside.shop){ drawMarket(inside, A, DOOR, shelf, cart, floaters); return; }
       if(inside && inside.icecream){ drawIce(inside, A, DOOR, flavors, cart, floaters, iceClerk, t); return; }
       if(inside && inside.diner){ drawDiner(inside, A, DOOR, menu, seats, cart, floaters, dinerClerk, t); return; }
@@ -1734,52 +1735,60 @@ function phaseCity(){
 }
 // ====== Nave mode: Among Us–style spaceship — do every task to win ======
 function phaseSpace(){
-  const WW=1700, WH=1150; const cam=makeCam(WW,WH);
+  const WW=2300, WH=1500; const cam=makeCam(WW,WH);
   const A=mkRoamer(WW/2, 300);
-  let t=0, won=false, active=null;
+  let t=0, won=false, lost=false, active=null;
   const rooms=[
-    {name:'Cafeteria', x:610, y:110, w:470, h:300, col:'#37506b'},
-    {name:'Navegação', x:1170,y:130, w:380, h:250, col:'#3b5d52'},
-    {name:'Reator',    x:120, y:300, w:330, h:300, col:'#5a3b52'},
-    {name:'Elétrica',  x:220, y:720, w:350, h:270, col:'#6b5a37'},
-    {name:'Armazém',   x:700, y:680, w:400, h:320, col:'#3b4b6b'},
-    {name:'Escudos',   x:1210,y:640, w:350, h:300, col:'#4b6b3b'},
+    {name:'Cafeteria',    x:840, y:120, w:460, h:300, col:'#37506b'},
+    {name:'Navegação',    x:1460,y:150, w:360, h:240, col:'#3b5d52'},
+    {name:'Comunicações', x:1900,y:430, w:300, h:260, col:'#4b3b6b'},
+    {name:'Reator',       x:120, y:300, w:320, h:300, col:'#5a3b52'},
+    {name:'Medbay',       x:520, y:520, w:300, h:240, col:'#3b6b6b'},
+    {name:'Elétrica',     x:150, y:760, w:330, h:260, col:'#6b5a37'},
+    {name:'Armazém',      x:900, y:700, w:380, h:320, col:'#3b4b6b'},
+    {name:'Motores',      x:1400,y:520, w:300, h:300, col:'#6b3b3b'},
+    {name:'Escudos',      x:1520,y:960, w:360, h:300, col:'#4b6b3b'},
   ];
   const tasks=[
-    {name:'Conectar fios',    icon:'🔌', type:'wires', x:840, y:300, done:false},
-    {name:'Traçar rota',      icon:'🧭', type:'order', x:1360,y:250, done:false},
-    {name:'Ligar reator',     icon:'⚛️', type:'scan',  x:285, y:450, done:false},
-    {name:'Carregar energia', icon:'⚡', type:'fuel',  x:395, y:855, done:false},
-    {name:'Guardar a carga',  icon:'📦', type:'wires', x:900, y:840, done:false},
-    {name:'Ativar escudos',   icon:'🛡️', type:'order', x:1385,y:790, done:false},
+    {name:'Conectar fios',    icon:'🔌', type:'wires', x:1000,y:300, done:false},
+    {name:'Limpar lixo',      icon:'🗑️', type:'wires', x:1250,y:230, done:false},
+    {name:'Traçar rota',      icon:'🧭', type:'order', x:1600,y:260, done:false},
+    {name:'Enviar sinal',     icon:'📡', type:'scan',  x:2030,y:540, done:false},
+    {name:'Ligar reator',     icon:'⚛️', type:'scan',  x:270, y:450, done:false},
+    {name:'Exame médico',     icon:'🩺', type:'order', x:660, y:630, done:false},
+    {name:'Carregar energia', icon:'⚡', type:'fuel',  x:300, y:880, done:false},
+    {name:'Guardar a carga',  icon:'📦', type:'wires', x:1080,y:850, done:false},
+    {name:'Abastecer motor',  icon:'🛠️', type:'fuel',  x:1540,y:660, done:false},
+    {name:'Ativar escudos',   icon:'🛡️', type:'order', x:1700,y:1090,done:false},
   ];
   let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
   rooms.forEach(r=>{ minx=Math.min(minx,r.x); miny=Math.min(miny,r.y); maxx=Math.max(maxx,r.x+r.w); maxy=Math.max(maxy,r.y+r.h); });
   const deck={x:minx-44,y:miny-44,w:(maxx-minx)+88,h:(maxy-miny)+88};
   const npcs=[];
-  for(let i=0;i<5;i++) npcs.push({ char:(charSel+i+1)%CHARS.length, x:rand(deck.x+80,deck.x+deck.w-80),
+  for(let i=0;i<7;i++) npcs.push({ char:(charSel+i+1)%CHARS.length, x:rand(deck.x+80,deck.x+deck.w-80),
     y:rand(deck.y+80,deck.y+deck.h-80), vx:0, vy:0, face:1, walk:0, tx:0, ty:0, wait:0 });
   npcs.forEach(n=>{ n.tx=rand(deck.x+80,deck.x+deck.w-80); n.ty=rand(deck.y+80,deck.y+deck.h-80); });
-  // one crewmate is secretly the impostor
-  if(npcs.length) npcs[(charSel*3+1)%npcs.length].imp=true;
-  let impCd=300; const ghosts=[];
+  // TWO secret impostors that hunt the crew AND the player
+  if(npcs.length>=2){ npcs[(charSel*3+1)%npcs.length].imp=true; npcs[(charSel*5+4)%npcs.length].imp=true; }
+  let impCd=240; const ghosts=[];
+  let darkT=0, sabCd=520;   // lights-out sabotage timer
   cam.snap(A.x,A.y);
-  const COLORS=['#ff5b5b','#4ec0ff','#7fc24a','#ffd23f'];
+  const COLORS=['#ff5b5b','#4ec0ff','#7fc24a','#ffd23f','#b07ee0','#ff9f3a'];
   // overlay panel geometry (screen space)
-  const Pn={x:46,y:228,w:W-92,h:392};
+  const Pn={x:46,y:222,w:W-92,h:404};
   const closeB={x:Pn.x+Pn.w-26,y:Pn.y+26,r:15};
-  const wRows=[Pn.y+96,Pn.y+168,Pn.y+240,Pn.y+312], wLX=Pn.x+58, wRX=Pn.x+Pn.w-58;
-  const fuelBtn={x:W/2,y:Pn.y+318,w:200,h:54};
-  const scanBtn={x:W/2,y:Pn.y+318,w:220,h:54};
-  const orderPos=[[Pn.x+70,Pn.y+120],[Pn.x+Pn.w-86,Pn.y+150],[Pn.x+Pn.w/2,Pn.y+110],
-                  [Pn.x+96,Pn.y+270],[Pn.x+Pn.w-110,Pn.y+280]];
+  const wRows=[Pn.y+82,Pn.y+146,Pn.y+210,Pn.y+274,Pn.y+338], wLX=Pn.x+56, wRX=Pn.x+Pn.w-56;
+  const fuelBtn={x:W/2,y:Pn.y+330,w:200,h:52};
+  const scanBtn={x:W/2,y:Pn.y+330,w:220,h:52};
+  const orderPos=[[Pn.x+66,Pn.y+110],[Pn.x+Pn.w-84,Pn.y+140],[Pn.x+Pn.w/2,Pn.y+96],
+                  [Pn.x+96,Pn.y+250],[Pn.x+Pn.w-104,Pn.y+270],[Pn.x+Pn.w/2-10,Pn.y+330]];
   function shuffle(a,seed){ const r=a.slice(); for(let i=r.length-1;i>0;i--){ const j=(i*7+seed*3+1)%(i+1); const tmp=r[i]; r[i]=r[j]; r[j]=tmp; } return r; }
   function openTask(task){
     const i=tasks.indexOf(task);
-    if(task.type==='wires') active={ task, type:'wires', sel:-1, matched:[false,false,false,false], right:shuffle([0,1,2,3],i+1) };
+    if(task.type==='wires') active={ task, type:'wires', sel:-1, matched:[false,false,false,false,false], right:shuffle([0,1,2,3,4],i+1) };
     else if(task.type==='fuel') active={ task, type:'fuel', fill:0 };
     else if(task.type==='scan') active={ task, type:'scan', started:false, prog:0 };
-    else active={ task, type:'order', next:1, n:5, nums:shuffle([1,2,3,4,5],i+2) };
+    else active={ task, type:'order', next:1, n:6, nums:shuffle([1,2,3,4,5,6],i+2) };
     Sound.sfx('blip');
   }
   function finishTask(){ active.task.done=true; active=null; Sound.sfx('collect');
@@ -1790,12 +1799,12 @@ function phaseSpace(){
   function tapOverlay(x,y){
     if(Math.hypot(x-closeB.x,y-closeB.y)<closeB.r+4){ active=null; Sound.sfx('blip'); return; }
     if(active.type==='wires'){
-      for(let i=0;i<4;i++){ if(!active.matched[i] && Math.hypot(x-wLX,y-wRows[i])<26){ active.sel=i; Sound.sfx('blip'); return; } }
-      for(let r=0;r<4;r++){ if(Math.hypot(x-wRX,y-wRows[r])<26){ const c=active.right[r];
+      for(let i=0;i<5;i++){ if(!active.matched[i] && Math.hypot(x-wLX,y-wRows[i])<24){ active.sel=i; Sound.sfx('blip'); return; } }
+      for(let r=0;r<5;r++){ if(Math.hypot(x-wRX,y-wRows[r])<24){ const c=active.right[r];
         if(active.sel>=0 && c===active.sel){ active.matched[c]=true; active.sel=-1; Sound.sfx('collect');
           if(active.matched.every(Boolean)) finishTask(); } return; } }
     } else if(active.type==='fuel'){
-      if(Math.abs(x-fuelBtn.x)<fuelBtn.w/2 && Math.abs(y-fuelBtn.y)<fuelBtn.h/2){ active.fill=Math.min(1,active.fill+0.18); Sound.sfx('blip');
+      if(Math.abs(x-fuelBtn.x)<fuelBtn.w/2 && Math.abs(y-fuelBtn.y)<fuelBtn.h/2){ active.fill=Math.min(1,active.fill+0.11); Sound.sfx('blip');
         if(active.fill>=1) finishTask(); }
     } else if(active.type==='scan'){
       if(!active.started && Math.abs(x-scanBtn.x)<scanBtn.w/2 && Math.abs(y-scanBtn.y)<scanBtn.h/2){ active.started=true; Sound.sfx('blip'); }
@@ -1808,17 +1817,18 @@ function phaseSpace(){
   function roomAt(x,y){ for(const r of rooms){ if(x>r.x&&x<r.x+r.w&&y>r.y&&y<r.y+r.h) return r; } return null; }
   return {
     tap(x,y){
-      if(won) return;
+      if(won||lost) return;
       if(active){ tapOverlay(x,y); return; }
       const wx=x+cam.x, wy=y+cam.y;
       for(const tk of tasks){ if(!tk.done && Math.hypot(tk.x-wx,tk.y-wy)<46){ openTask(tk); return; } }
     },
     update(){ t++; if(paused) return;
-      if(t===1) toast('👀 Cuidado: há 1 impostor na nave!');
+      if(t===1) toast('👀 Cuidado: há 2 impostores na nave!');
       for(let i=ghosts.length-1;i>=0;i--){ const g=ghosts[i]; g.y-=0.8; g.life-=0.012; if(g.life<=0) ghosts.splice(i,1); }
-      if(won){ jumpQueued=false; return; }
+      if(darkT>0) darkT--;
+      if(won||lost){ jumpQueued=false; return; }
       if(active){ jumpQueued=false;
-        if(active.type==='scan' && active.started){ active.prog=Math.min(1,active.prog+0.018); if(active.prog>=1) finishTask(); }
+        if(active.type==='scan' && active.started){ active.prog=Math.min(1,active.prog+0.012); if(active.prog>=1) finishTask(); }
         return;
       }
       if(jumpQueued){ jumpQueued=false; const tk=nearTask(); if(tk){ openTask(tk); return; } }
@@ -1826,21 +1836,33 @@ function phaseSpace(){
       const sp=Math.hypot(A.vx,A.vy); if(sp>6){ A.vx*=6/sp; A.vy*=6/sp; }
       A.x=clamp(A.x+A.vx,deck.x+24,deck.x+deck.w-24); A.y=clamp(A.y+A.vy,deck.y+24,deck.y+deck.h-24);
       if(Math.abs(A.vx)>0.2) A.face=A.vx>0?1:-1; A.moving=Math.hypot(A.vx,A.vy); A.walk+=A.moving*0.18;
-      // impostor eliminates a nearby crewmate every so often (gentle: they float away as a 👻)
+      // lights-out sabotage: the impostors plunge the ship into darkness
+      if(--sabCd<=0){ darkT=260; sabCd=560; Sound.sfx('lose'); toast('⚠️ Luzes apagadas! Cuidado!'); }
+      // impostors hunt: eliminate a nearby crewmate, and CATCH the player (game over)
       if(impCd>0) impCd--;
-      const imp=npcs.find(c=>c.imp);
-      if(imp && impCd<=0 && npcs.length>2){ let tgt=null,best=1e9;
-        npcs.forEach(m=>{ if(m!==imp){ const d=Math.hypot(m.x-imp.x,m.y-imp.y); if(d<best){best=d;tgt=m;} } });
-        if(tgt && best<30){ ghosts.push({x:tgt.x,y:tgt.y,life:1}); npcs.splice(npcs.indexOf(tgt),1);
-          impCd=300; Sound.sfx('lose'); toast('Um tripulante sumiu... 👻'); } }
+      const imps=npcs.filter(c=>c.imp);
+      imps.forEach(imp=>{
+        // catch the player if close (not while safely doing a task)
+        if(Math.hypot(A.x-imp.x,A.y-imp.y)<26){ lost=true; Sound.sfx('lose'); }
+        if(impCd<=0 && npcs.length>imps.length+1){ let tgt=null,best=1e9;
+          npcs.forEach(m=>{ if(!m.imp){ const d=Math.hypot(m.x-imp.x,m.y-imp.y); if(d<best){best=d;tgt=m;} } });
+          if(tgt && best<30){ ghosts.push({x:tgt.x,y:tgt.y,life:1}); npcs.splice(npcs.indexOf(tgt),1);
+            impCd=180; Sound.sfx('lose'); toast('Um tripulante sumiu... 👻'); } }
+      });
+      if(lost) return;
       npcs.forEach(n=>{
-        if(n.imp){ let tgt=null,best=1e9; npcs.forEach(m=>{ if(m!==n){ const d=Math.hypot(m.x-n.x,m.y-n.y); if(d<best){best=d;tgt=m;} } });
-          if(tgt){ const dx=tgt.x-n.x, dy=tgt.y-n.y, d=Math.hypot(dx,dy)||1; n.vx+=dx/d*0.22; n.vy+=dy/d*0.22; } }
+        if(n.imp){ // chase the player when near, else the nearest crewmate
+          let tgt=null,best=1e9; npcs.forEach(m=>{ if(m!==n && !m.imp){ const d=Math.hypot(m.x-n.x,m.y-n.y); if(d<best){best=d;tgt=m;} } });
+          const dp=Math.hypot(A.x-n.x,A.y-n.y);
+          if(dp<420 || !tgt || dp<best*1.3){ const dx=A.x-n.x, dy=A.y-n.y, d=Math.hypot(dx,dy)||1; n.vx+=dx/d*0.34; n.vy+=dy/d*0.34; }
+          else { const dx=tgt.x-n.x, dy=tgt.y-n.y, d=Math.hypot(dx,dy)||1; n.vx+=dx/d*0.3; n.vy+=dy/d*0.3; }
+          const s=Math.hypot(n.vx,n.vy); if(s>4.6){ n.vx*=4.6/s; n.vy*=4.6/s; } }   // impostors a touch slower than you
         else if(n.wait>0){ n.wait--; n.vx*=0.8; n.vy*=0.8; }
         else { const dx=n.tx-n.x, dy=n.ty-n.y, d=Math.hypot(dx,dy)||1;
           if(d<22){ n.wait=30+((t+n.char*13)%70); n.tx=rand(deck.x+80,deck.x+deck.w-80); n.ty=rand(deck.y+80,deck.y+deck.h-80); }
           else { n.vx+=dx/d*0.2; n.vy+=dy/d*0.2; } }
-        n.vx*=0.86; n.vy*=0.86; n.x+=n.vx; n.y+=n.vy;
+        n.vx*=0.86; n.vy*=0.86;
+        n.x=clamp(n.x+n.vx,deck.x+20,deck.x+deck.w-20); n.y=clamp(n.y+n.vy,deck.y+20,deck.y+deck.h-20);
         if(Math.abs(n.vx)>0.1) n.face=n.vx>0?1:-1; n.walk+=Math.hypot(n.vx,n.vy)*0.18; });
       cam.follow(A.x,A.y,0.12);
     },
@@ -1878,17 +1900,25 @@ function phaseSpace(){
         else drawCrewmate(CHARS[d.o.char], d.o.x+ox, d.o.y+oy, 1, d.o.face, Math.hypot(d.o.vx,d.o.vy)>0.3?d.o.walk:null); }
       // ghosts of eliminated crewmates float up
       ghosts.forEach(g=>{ ctx.save(); ctx.globalAlpha=Math.max(0,g.life)*0.9; emoji('👻', g.x+ox, g.y+oy, 30); ctx.restore(); });
+      // lights-out sabotage: only a small circle around the hero is visible
+      if(darkT>0 && !active && !won && !lost){
+        const hx=A.x+ox, hy=A.y+oy;
+        const g=ctx.createRadialGradient(hx,hy,40, hx,hy,200);
+        g.addColorStop(0,'rgba(2,4,10,0)'); g.addColorStop(0.6,'rgba(2,4,10,.55)'); g.addColorStop(1,'rgba(2,4,10,.97)');
+        ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      }
       // use prompt
-      if(!active && !won){ const tk=nearTask();
+      if(!active && !won && !lost){ const tk=nearTask();
         if(tk){ const px=W/2, py=H-150; ctx.fillStyle='rgba(0,0,0,.6)'; rrect(px-140,py-18,280,34,16); ctx.fill();
           ctx.fillStyle='#ffce54'; ctx.font='bold 16px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
           ctx.fillText('⤴ fazer: '+tk.name, px, py); } }
-      vignette(0.34);
+      if(!(darkT>0)) vignette(0.34);
       const done=tasks.filter(q=>q.done).length;
-      banner('🚀 Tarefas: '+done+'/'+tasks.length);
+      banner('🚀 Tarefas: '+done+'/'+tasks.length+(darkT>0?'  💡❌':''));
       if(active) drawTaskOverlay();
       else if(won) drawWin();
-      else hint('Faça as tarefas (⤴ no !) · cuidado com o impostor 👻');
+      else if(lost) drawLost();
+      else hint('Faça as tarefas (⤴ no !) · fuja dos 2 impostores 👻');
     }
   };
   // ---- overlay renderers (closure: read `active`) ----
@@ -1906,14 +1936,12 @@ function phaseSpace(){
     panelBase(active.task.icon+' '+active.task.name);
     if(active.type==='wires'){
       // connected wires
-      for(let i=0;i<4;i++){ if(active.matched[i]){ let r=active.right.indexOf(i);
+      for(let i=0;i<5;i++){ if(active.matched[i]){ let r=active.right.indexOf(i);
         ctx.strokeStyle=COLORS[i]; ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(wLX,wRows[i]); ctx.lineTo(wRX,wRows[r]); ctx.stroke(); } }
-      for(let i=0;i<4;i++){ ctx.fillStyle=COLORS[i]; ctx.strokeStyle=active.sel===i?'#fff':'#000'; ctx.lineWidth=active.sel===i?4:2;
-        ctx.beginPath(); ctx.arc(wLX,wRows[i],20,0,7); ctx.fill(); ctx.stroke(); }
-      for(let r=0;r<4;r++){ ctx.fillStyle=COLORS[active.right[r]]; ctx.strokeStyle='#000'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.arc(wRX,wRows[r],20,0,7); ctx.fill(); ctx.stroke(); }
-      ctx.fillStyle='#cdd6e6'; ctx.font='15px Trebuchet MS'; ctx.textAlign='center';
-      ctx.fillText('Ligue cada cor à sua igual', W/2, Pn.y+Pn.h-26);
+      for(let i=0;i<5;i++){ ctx.fillStyle=COLORS[i]; ctx.strokeStyle=active.sel===i?'#fff':'#000'; ctx.lineWidth=active.sel===i?4:2;
+        ctx.beginPath(); ctx.arc(wLX,wRows[i],18,0,7); ctx.fill(); ctx.stroke(); }
+      for(let r=0;r<5;r++){ ctx.fillStyle=COLORS[active.right[r]]; ctx.strokeStyle='#000'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(wRX,wRows[r],18,0,7); ctx.fill(); ctx.stroke(); }
     } else if(active.type==='fuel'){
       const tx=W/2-40, ty=Pn.y+80, tw=80, th=170;
       ctx.fillStyle='#0e1626'; ctx.strokeStyle='#3a4a66'; ctx.lineWidth=3; rrect(tx,ty,tw,th,10); ctx.fill(); ctx.stroke();
@@ -1951,43 +1979,89 @@ function phaseSpace(){
     ctx.fillStyle='#e6ecf7'; ctx.font='17px Trebuchet MS'; ctx.fillText('A tripulação venceu! 🎉', W/2, H/2+38);
     ctx.fillStyle='#9fb0cc'; ctx.font='15px Trebuchet MS'; ctx.fillText('Aperte 🏠 para voltar', W/2, H/2+80);
   }
+  function drawLost(){
+    ctx.fillStyle='rgba(20,4,8,.78)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#241018'; ctx.strokeStyle='#c0394a'; ctx.lineWidth=3; rrect(W/2-180,H/2-130,360,260,20); ctx.fill(); ctx.stroke();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='64px serif'; ctx.fillText('👻', W/2, H/2-60);
+    ctx.fillStyle='#ff8090'; ctx.font='bold 26px Trebuchet MS'; ctx.fillText('Você foi pego!', W/2, H/2+2);
+    ctx.fillStyle='#e6ecf7'; ctx.font='17px Trebuchet MS'; ctx.fillText('O impostor te pegou 😱', W/2, H/2+38);
+    ctx.fillStyle='#c9a0a8'; ctx.font='15px Trebuchet MS'; ctx.fillText('Aperte 🏠 para voltar', W/2, H/2+80);
+  }
 }
-// park soccer field with the hero + friends
-function drawSoccer(A,npcs,ball,scoreYou,scoreThem,FT,FB){
-  // pitch
-  const g=ctx.createLinearGradient(0,FT,0,FB); g.addColorStop(0,'#5db35a'); g.addColorStop(1,'#479147');
+// a soccer ball
+function drawBall(ball){
+  ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(ball.x,ball.y+10,ball.r,5,0,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.strokeStyle='#333'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r*0.4,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(ball.x-ball.r*0.5,ball.y-ball.r*0.4,ball.r*0.22,0,7); ctx.arc(ball.x+ball.r*0.5,ball.y+ball.r*0.4,ball.r*0.22,0,7); ctx.fill();
+}
+// each playground station, with its friend animating
+function drawStation(s,t){
+  const x=s.x, y=s.y, T=t*0.05+s.ph;
+  if(s.type==='swing'){
+    const topY=y-92;
+    ctx.strokeStyle='#8a5a2b'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x-34,y+8); ctx.lineTo(x-10,topY); ctx.moveTo(x+34,y+8); ctx.lineTo(x+10,topY);
+    ctx.moveTo(x-15,topY); ctx.lineTo(x+15,topY); ctx.stroke();
+    const ang=Math.sin(T)*0.5, len=58, sx=x+Math.sin(ang)*len, sy=topY+Math.cos(ang)*len;
+    ctx.strokeStyle='#777'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x-8,topY); ctx.lineTo(sx-7,sy); ctx.moveTo(x+8,topY); ctx.lineTo(sx+7,sy); ctx.stroke();
+    ctx.fillStyle='#a0673a'; rrect(sx-13,sy,26,6,2); ctx.fill();
+    drawChar(CHARS[s.char], sx, sy-14, 0.66, ang>0?1:-1, 0, null);
+  } else if(s.type==='slide'){
+    const topX=x-44, topY=y-66, botX=x+52, botY=y+14;
+    ctx.fillStyle='#8a5a2b'; rrect(topX-26,topY-6,28,80,4); ctx.fill();            // ladder block
+    ctx.strokeStyle='#c0563f'; ctx.lineWidth=11; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(botX,botY); ctx.stroke();   // slide surface
+    ctx.strokeStyle='#9a4030'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(topX,topY-7); ctx.lineTo(botX,botY-7); ctx.stroke();
+    const p=(T*0.6)%1, cx=topX+(botX-topX)*p, cy=topY+(botY-topY)*p;
+    drawChar(CHARS[s.char], cx, cy-14, 0.62, 1, 0, null);
+  } else if(s.type==='seesaw'){
+    const tilt=Math.sin(T)*0.32, len=52, py=y-12;
+    ctx.fillStyle='#8a5a2b'; ctx.beginPath(); ctx.moveTo(x-14,y+10); ctx.lineTo(x+14,y+10); ctx.lineTo(x,py); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.translate(x,py); ctx.rotate(tilt);
+    ctx.fillStyle='#d0a050'; ctx.strokeStyle='#a87a3e'; ctx.lineWidth=1.5; rrect(-len,-5,len*2,10,4); ctx.fill(); ctx.stroke(); ctx.restore();
+    const ex=x+len*Math.cos(tilt), ey=py+len*Math.sin(tilt);
+    const ex2=x-len*Math.cos(tilt), ey2=py-len*Math.sin(tilt);
+    drawChar(CHARS[s.char], ex, ey-15, 0.6, -1, 0, null);
+    drawChar(CHARS[(s.char+2)%CHARS.length], ex2, ey2-15, 0.6, 1, 0, null);
+  } else if(s.type==='sandbox'){
+    ctx.fillStyle='#e6c98a'; ctx.strokeStyle='#8a5a2b'; ctx.lineWidth=6; rrect(x-46,y-26,92,56,8); ctx.fill(); ctx.stroke();
+    emoji('🪣', x-28, y+4, 20); emoji('🏰', x+26, y-2, 22);
+    drawChar(CHARS[s.char], x-2, y-4, 0.58, 1, Math.sin(T*2)*1.5, null);
+  } else if(s.type==='rope'){
+    const jump=Math.abs(Math.sin(T*2.2))*16, ph=Math.sin(T*2.2);
+    ctx.strokeStyle='#d04b8a'; ctx.lineWidth=3; ctx.beginPath();
+    if(ph>0) ctx.ellipse(x,y+6,28,18,0,0,Math.PI); else ctx.ellipse(x,y-32,28,15,0,Math.PI,0);
+    ctx.stroke();
+    drawChar(CHARS[s.char], x, y-14-jump, 0.7, 1, 0, jump>5?'jump':null);
+  }
+}
+// park playground: friends each playing at a different spot + a soccer corner
+function drawPark(A,stations,ball,soccerPal,score,FT,t){
+  // grass + path
   ctx.fillStyle='#7cc06a'; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=g; ctx.fillRect(0,FT,W,FB-FT);
-  // mowed stripes
-  ctx.fillStyle='rgba(255,255,255,.05)';
-  for(let x=0;x<W;x+=64) ctx.fillRect(x,FT,32,FB-FT);
-  // lines
-  ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=3;
-  ctx.strokeRect(16,FT+6,W-32,FB-FT-12);
-  ctx.beginPath(); ctx.moveTo(W/2,FT+6); ctx.lineTo(W/2,FB-6); ctx.stroke();
-  ctx.beginPath(); ctx.arc(W/2,(FT+FB)/2,46,0,7); ctx.stroke();
-  // goals (left & right)
-  const gTop=H*0.5-72, gBot=H*0.5+72;
-  ctx.fillStyle='rgba(255,255,255,.85)';
-  ctx.fillRect(6,gTop,12,gBot-gTop); ctx.fillRect(W-18,gTop,12,gBot-gTop);
-  ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1;
-  for(let yy=gTop;yy<gBot;yy+=10){ ctx.beginPath(); ctx.moveTo(6,yy); ctx.lineTo(18,yy); ctx.stroke(); }
-  for(let yy=gTop;yy<gBot;yy+=10){ ctx.beginPath(); ctx.moveTo(W-18,yy); ctx.lineTo(W-6,yy); ctx.stroke(); }
-  // actors + ball, depth-sorted by y
-  const list=[{y:A.y,k:'me'},{y:ball.y,k:'ball'}];
-  npcs.forEach(n=>list.push({y:n.y,k:'npc',o:n}));
+  ctx.fillStyle='#74b863'; for(let i=0;i<W;i+=44) ctx.fillRect(i,0,22,H);
+  ctx.fillStyle='#cbb78a'; ctx.fillRect(0,H*0.52-15,W,30); ctx.fillRect(W/2-15,FT,30,H-FT);
+  // soccer corner goal (bottom centre)
+  const gx0=W/2-60, gx1=W/2+60, gy=H-26;
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=4;
+  ctx.strokeRect(gx0,gy-4,gx1-gx0,8);
+  ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1;
+  for(let xx=gx0;xx<=gx1;xx+=12){ ctx.beginPath(); ctx.moveTo(xx,gy-4); ctx.lineTo(xx,gy+10); ctx.stroke(); }
+  // stations (background), sorted by y
+  stations.slice().sort((a,b)=>a.y-b.y).forEach(s=> drawStation(s,t));
+  // ball + soccer friend + hero, depth-sorted
+  const list=[{y:A.y,k:'me'},{y:ball.y,k:'ball'},{y:soccerPal.y,k:'pal'}];
   list.sort((a,b)=>a.y-b.y);
   for(const d of list){
-    if(d.k==='ball'){ ctx.fillStyle='rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(ball.x,ball.y+10,ball.r,5,0,0,7); ctx.fill();
-      ctx.fillStyle='#fff'; ctx.strokeStyle='#333'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,7); ctx.fill(); ctx.stroke();
-      ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r*0.4,0,7); ctx.fill();
-      ctx.beginPath(); ctx.arc(ball.x-ball.r*0.5,ball.y-ball.r*0.4,ball.r*0.22,0,7); ctx.arc(ball.x+ball.r*0.5,ball.y+ball.r*0.4,ball.r*0.22,0,7); ctx.fill();
-    } else if(d.k==='me'){ const pose=A.moving>0.5?A.walk:null; drawChar(CHARS[charSel],A.x,A.y-12,1,A.face,0,pose);
-    } else { const n=d.o; const pose=(n.moving||0)>0.5?n.walk:null; drawChar(CHARS[n.char],n.x,n.y-12,1,n.face,0,pose); }
+    if(d.k==='ball') drawBall(ball);
+    else if(d.k==='me'){ const pose=A.moving>0.5?A.walk:null; drawChar(CHARS[charSel],A.x,A.y-12,1,A.face,0,pose); }
+    else { const pose=(soccerPal.moving||0)>0.5?soccerPal.walk:null; drawChar(CHARS[soccerPal.char],soccerPal.x,soccerPal.y-12,1,soccerPal.face,0,pose); }
   }
   vignette(0.3);
-  banner('⚽ Você '+scoreYou+'  —  '+scoreThem+' Amigos');
-  hint('Direcional/WASD: corra e chute a bola · ⤴ para sair 🚪');
+  banner('🏞️ Parque — Gols: '+score);
+  hint('Corra e chute a bola ⚽ no gol · cada amigo brinca num lugar · ⤴ sai');
 }
 // supermarket interior: aisles of food the hero taps to buy
 function drawMarket(p,A,DOOR,shelf,cart,floaters){
